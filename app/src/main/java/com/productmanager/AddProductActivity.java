@@ -391,12 +391,16 @@ public class AddProductActivity extends AppCompatActivity {
             currentProduct = database.productDao().getProductById(productId);
             if (currentProduct != null) {
                 runOnUiThread(() -> {
-                    etName.setText(currentProduct.getName());
-                    etSpecification.setText(currentProduct.getSpecification());
-                    etSize.setText(currentProduct.getSize());
-                    etMaterial.setText(currentProduct.getMaterial());
-                    etPrice.setText(String.valueOf(currentProduct.getPrice()));
-                    etScript.setText(currentProduct.getScript());
+                    etName.setText(currentProduct.getName() != null ? currentProduct.getName() : "");
+                    etSpecification.setText(currentProduct.getSpecification() != null ? currentProduct.getSpecification() : "");
+                    etSize.setText(currentProduct.getSize() != null ? currentProduct.getSize() : "");
+                    etMaterial.setText(currentProduct.getMaterial() != null ? currentProduct.getMaterial() : "");
+                    etScript.setText(currentProduct.getScript() != null ? currentProduct.getScript() : "");
+                    
+                    if (currentProduct.getPrice() != 0) {
+                        etPrice.setText(String.valueOf(currentProduct.getPrice()));
+                    }
+                    
                     currentPhotoPath = currentProduct.getPhotoPath();
 
                     if (currentPhotoPath != null && !currentPhotoPath.isEmpty()) {
@@ -408,6 +412,12 @@ public class AddProductActivity extends AppCompatActivity {
                                     .into(ivPhoto);
                         }
                     }
+                });
+            } else {
+                // 产品不存在，返回主页面
+                runOnUiThread(() -> {
+                    Toast.makeText(this, "产品不存在", Toast.LENGTH_SHORT).show();
+                    finish();
                 });
             }
         });
@@ -447,8 +457,17 @@ public class AddProductActivity extends AppCompatActivity {
                 // 新增
                 product = new Product();
             } else {
-                // 编辑
-                product = database.productDao().getProductById(productId);
+                // 编辑 - 使用已加载的 currentProduct
+                if (currentProduct != null) {
+                    product = currentProduct;
+                } else {
+                    // 如果 currentProduct 为空，尝试重新获取
+                    product = database.productDao().getProductById(productId);
+                    if (product == null) {
+                        // 产品不存在，创建新的
+                        product = new Product();
+                    }
+                }
             }
 
             product.setName(name);

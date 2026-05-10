@@ -46,8 +46,8 @@ public abstract class ProductDatabase extends RoomDatabase {
                             "product_database"
                     )
                     .addMigrations(MIGRATION_1_2)
-                    // 如果迁移失败，允许重建数据库（会丢失数据，但不会崩溃）
-                    .fallbackToDestructiveMigration()
+                    // 只在降级时才允许重建数据库，升级时必须使用迁移
+                    .fallbackToDestructiveMigrationOnDowngrade()
                     .build();
                 }
             }
