@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<androidx.constraintlayout.widget.ConstraintLayout 
+<androidx.constraintlayout.widget.ConstraintLayout
     xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
@@ -60,7 +60,7 @@
         android:layout_height="wrap_content"
         android:drawablePadding="16dp"
         android:gravity="center"
-        android:text="暂无产品\n点击右下角按钮添加"
+        android:text="暂无产品\n点击底部按钮添加"
         android:textColor="#999999"
         android:textSize="16sp"
         android:visibility="gone"
@@ -85,18 +85,32 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent" />
 
-    <!-- 添加按钮 -->
-    <com.google.android.material.floatingactionbutton.FloatingActionButton
-        android:id="@+id/fab_add"
-        android:layout_width="wrap_content"
+    <!-- 底部按钮容器 -->
+    <FrameLayout
+        android:id="@+id/bottom_button_container"
+        android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:layout_marginEnd="48dp"
         android:layout_marginBottom="24dp"
-        android:contentDescription="添加产品"
-        android:src="@drawable/ic_add"
-        app:backgroundTint="#2196F3"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toStartOf="@id/side_index_bar"
-        app:tint="#FFFFFF" />
+        app:layout_constraintStart_toStartOf="parent">
+
+        <!-- 磨砂玻璃效果添加按钮 -->
+        <Button
+            android:id="@+id/btn_add"
+            android:layout_width="match_parent"
+            android:layout_height="52dp"
+            android:layout_marginStart="24dp"
+            android:layout_marginEnd="24dp"
+            android:background="@drawable/bg_frosted_button"
+            android:text="添加产品"
+            android:textColor="#FFFFFF"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            android:drawableStart="@drawable/ic_add_white"
+            android:drawablePadding="8dp"
+            android:gravity="center" />
+
+    </FrameLayout>
 
 </androidx.constraintlayout.widget.ConstraintLayout>

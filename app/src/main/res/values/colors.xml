@@ -11,4 +11,7 @@
     <color name="divider">#EEEEEE</color>
     <color name="item_background">#FFFFFF</color>
     <color name="letter_header_background">#F0F0F0</color>
+
+    <!-- Launcher icon background color -->
+    <color name="ic_launcher_background">#FFFFFF</color>
 </resources>

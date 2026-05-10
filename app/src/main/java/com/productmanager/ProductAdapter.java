@@ -17,27 +17,27 @@ import java.util.List;
 
 /**
  * 产品列表适配器
- * 显示产品信息，包括名称、规格、价格
+ * 显示产品信息，包括名称、规格、材质、价格
  */
 public class ProductAdapter extends RecyclerView.Adapter<ProductAdapter.ProductViewHolder> {
-    
+
     private List<Product> products = new ArrayList<>();
     private OnProductClickListener listener;
-    
+
     public interface OnProductClickListener {
         void onProductClick(Product product);
         void onProductLongClick(Product product, int position);
     }
-    
+
     public void setOnProductClickListener(OnProductClickListener listener) {
         this.listener = listener;
     }
-    
+
     public void setProducts(List<Product> products) {
         this.products = products;
         notifyDataSetChanged();
     }
-    
+
     @NonNull
     @Override
     public ProductViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
@@ -45,43 +45,45 @@ public class ProductAdapter extends RecyclerView.Adapter<ProductAdapter.ProductV
                 .inflate(R.layout.item_product, parent, false);
         return new ProductViewHolder(view);
     }
-    
+
     @Override
     public void onBindViewHolder(@NonNull ProductViewHolder holder, int position) {
         Product product = products.get(position);
         holder.bind(product);
     }
-    
+
     @Override
     public int getItemCount() {
         return products.size();
     }
-    
+
     class ProductViewHolder extends RecyclerView.ViewHolder {
-        
+
         private ImageView ivPhoto;
         private TextView tvName;
         private TextView tvSpecification;
         private TextView tvSize;
+        private TextView tvMaterial;
         private TextView tvPrice;
         private TextView tvLetterHeader;
-        
+
         public ProductViewHolder(@NonNull View itemView) {
             super(itemView);
             ivPhoto = itemView.findViewById(R.id.iv_photo);
             tvName = itemView.findViewById(R.id.tv_name);
             tvSpecification = itemView.findViewById(R.id.tv_specification);
             tvSize = itemView.findViewById(R.id.tv_size);
+            tvMaterial = itemView.findViewById(R.id.tv_material);
             tvPrice = itemView.findViewById(R.id.tv_price);
             tvLetterHeader = itemView.findViewById(R.id.tv_letter_header);
-            
+
             itemView.setOnClickListener(v -> {
                 int pos = getAdapterPosition();
                 if (pos != RecyclerView.NO_POSITION && listener != null) {
                     listener.onProductClick(products.get(pos));
                 }
             });
-            
+
             itemView.setOnLongClickListener(v -> {
                 int pos = getAdapterPosition();
                 if (pos != RecyclerView.NO_POSITION && listener != null) {
@@ -90,30 +92,38 @@ public class ProductAdapter extends RecyclerView.Adapter<ProductAdapter.ProductV
                 return true;
             });
         }
-        
+
         public void bind(Product product) {
             // 设置产品名称
             tvName.setText(product.getName());
-            
+
             // 设置规格
             if (product.getSpecification() != null && !product.getSpecification().isEmpty()) {
-                tvSpecification.setText(product.getSpecification());
+                tvSpecification.setText("规格: " + product.getSpecification());
                 tvSpecification.setVisibility(View.VISIBLE);
             } else {
                 tvSpecification.setVisibility(View.GONE);
             }
-            
+
             // 设置尺寸
             if (product.getSize() != null && !product.getSize().isEmpty()) {
-                tvSize.setText(product.getSize());
+                tvSize.setText("尺寸: " + product.getSize());
                 tvSize.setVisibility(View.VISIBLE);
             } else {
                 tvSize.setVisibility(View.GONE);
             }
-            
+
+            // 设置材质
+            if (product.getMaterial() != null && !product.getMaterial().isEmpty()) {
+                tvMaterial.setText("材质: " + product.getMaterial());
+                tvMaterial.setVisibility(View.VISIBLE);
+            } else {
+                tvMaterial.setVisibility(View.GONE);
+            }
+
             // 设置价格（美金格式）
             tvPrice.setText(product.getFormattedPrice());
-            
+
             // 设置产品照片
             if (product.getPhotoPath() != null && !product.getPhotoPath().isEmpty()) {
                 File photoFile = new File(product.getPhotoPath());
@@ -130,7 +140,7 @@ public class ProductAdapter extends RecyclerView.Adapter<ProductAdapter.ProductV
             } else {
                 ivPhoto.setImageResource(R.drawable.ic_product);
             }
-            
+
             // 设置字母头部
             String letter = product.getFirstLetter();
             // 判断是否需要显示字母头部
