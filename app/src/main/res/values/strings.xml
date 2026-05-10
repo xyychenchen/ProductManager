@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">产品管理</string>
+    <string name="add_product">添加产品</string>
+    <string name="edit_product">编辑产品</string>
+    <string name="search_hint">搜索产品...</string>
+    <string name="product_name">产品名称</string>
+    <string name="specification">规格</string>
+    <string name="size">尺寸</string>
+    <string name="price">价格（美金）</string>
+    <string name="save">保存</string>
+    <string name="delete">删除</string>
+    <string name="cancel">取消</string>
+    <string name="empty_list">暂无产品\n点击右下角按钮添加</string>
+    <string name="select_photo">点击选择照片</string>
+    <string name="delete_confirm">确定要删除该产品吗？</string>
+</resources>
