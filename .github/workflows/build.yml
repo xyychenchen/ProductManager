@@ -31,7 +31,7 @@ jobs:
     - name: Build Debug APK
       run: ./gradlew assembleDebug
       
-    - name: Build Release APK
+    - name: Build Release APK (unsigned)
       run: ./gradlew assembleRelease
       
     - name: Upload Debug APK (Artifact)
@@ -55,20 +55,25 @@ jobs:
       uses: softprops/action-gh-release@v1
       if: github.event_name == 'push' && github.ref == 'refs/heads/main'
       with:
-        tag_name: v1.0.${{ steps.date.outputs.date }}
+        tag_name: v1.1.${{ steps.date.outputs.date }}
         name: Release ${{ steps.date.outputs.date }}
         body: |
           ## 产品管理 APP
           
           ### 下载说明
           - **app-debug.apk**: 调试版本，推荐下载
-          - **app-release.apk**: 发布版本
+          - **app-release.apk**: 发布版本（未签名）
           
           ### 安装方法
           1. 下载 APK 文件
           2. 发送到手机
           3. 点击安装
           4. 如提示"未知来源"，请在设置中允许
+          
+          ### 更新说明
+          - 支持直接覆盖更新，不会丢失数据
+          - 如果之前安装的版本签名不同，需要先卸载
+          - 此版本之后可直接覆盖更新
           
           ---
           编译时间: ${{ steps.date.outputs.date }}
