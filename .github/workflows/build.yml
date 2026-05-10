@@ -7,6 +7,9 @@ on:
     branches: [ main, master ]
   workflow_dispatch:  # 允许手动触发
 
+permissions:
+  contents: write  # 需要写权限来创建 Release
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -31,14 +34,46 @@ jobs:
     - name: Build Release APK
       run: ./gradlew assembleRelease
       
-    - name: Upload Debug APK
+    - name: Upload Debug APK (Artifact)
       uses: actions/upload-artifact@v4
       with:
         name: app-debug
         path: app/build/outputs/apk/debug/app-debug.apk
         
-    - name: Upload Release APK
+    - name: Upload Release APK (Artifact)
       uses: actions/upload-artifact@v4
       with:
         name: app-release
         path: app/build/outputs/apk/release/app-release.apk
+    
+    # 发布到 GitHub Releases
+    - name: Get current date
+      id: date
+      run: echo "date=$(date +'%Y%m%d_%H%M%S')" >> $GITHUB_OUTPUT
+      
+    - name: Create Release and Upload APK
+      uses: softprops/action-gh-release@v1
+      if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+      with:
+        tag_name: v1.0.${{ steps.date.outputs.date }}
+        name: Release ${{ steps.date.outputs.date }}
+        body: |
+          ## 产品管理 APP
+          
+          ### 下载说明
+          - **app-debug.apk**: 调试版本，推荐下载
+          - **app-release.apk**: 发布版本
+          
+          ### 安装方法
+          1. 下载 APK 文件
+          2. 发送到手机
+          3. 点击安装
+          4. 如提示"未知来源"，请在设置中允许
+          
+          ---
+          编译时间: ${{ steps.date.outputs.date }}
+        files: |
+          app/build/outputs/apk/debug/app-debug.apk
+          app/build/outputs/apk/release/app-release.apk
+        draft: false
+        prerelease: false
