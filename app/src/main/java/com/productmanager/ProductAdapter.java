@@ -94,28 +94,32 @@ public class ProductAdapter extends RecyclerView.Adapter<ProductAdapter.ProductV
         }
 
         public void bind(Product product) {
-            // 设置产品名称
-            tvName.setText(product.getName());
+            // 设置产品名称（添加空值检查）
+            String name = product.getName();
+            tvName.setText(name != null ? name : "");
 
-            // 设置规格
-            if (product.getSpecification() != null && !product.getSpecification().isEmpty()) {
-                tvSpecification.setText("规格: " + product.getSpecification());
+            // 设置规格（添加空值检查）
+            String specification = product.getSpecification();
+            if (specification != null && !specification.isEmpty()) {
+                tvSpecification.setText("规格: " + specification);
                 tvSpecification.setVisibility(View.VISIBLE);
             } else {
                 tvSpecification.setVisibility(View.GONE);
             }
 
-            // 设置尺寸
-            if (product.getSize() != null && !product.getSize().isEmpty()) {
-                tvSize.setText("尺寸: " + product.getSize());
+            // 设置尺寸（添加空值检查）
+            String size = product.getSize();
+            if (size != null && !size.isEmpty()) {
+                tvSize.setText("尺寸: " + size);
                 tvSize.setVisibility(View.VISIBLE);
             } else {
                 tvSize.setVisibility(View.GONE);
             }
 
-            // 设置材质
-            if (product.getMaterial() != null && !product.getMaterial().isEmpty()) {
-                tvMaterial.setText("材质: " + product.getMaterial());
+            // 设置材质（添加空值检查）
+            String material = product.getMaterial();
+            if (material != null && !material.isEmpty()) {
+                tvMaterial.setText("材质: " + material);
                 tvMaterial.setVisibility(View.VISIBLE);
             } else {
                 tvMaterial.setVisibility(View.GONE);
@@ -124,9 +128,10 @@ public class ProductAdapter extends RecyclerView.Adapter<ProductAdapter.ProductV
             // 设置价格（美金格式）
             tvPrice.setText(product.getFormattedPrice());
 
-            // 设置产品照片
-            if (product.getPhotoPath() != null && !product.getPhotoPath().isEmpty()) {
-                File photoFile = new File(product.getPhotoPath());
+            // 设置产品照片（添加空值检查）
+            String photoPath = product.getPhotoPath();
+            if (photoPath != null && !photoPath.isEmpty()) {
+                File photoFile = new File(photoPath);
                 if (photoFile.exists()) {
                     Glide.with(itemView.getContext())
                             .load(photoFile)
@@ -145,10 +150,13 @@ public class ProductAdapter extends RecyclerView.Adapter<ProductAdapter.ProductV
             String letter = product.getFirstLetter();
             // 判断是否需要显示字母头部
             int position = getAdapterPosition();
+            if (position == RecyclerView.NO_POSITION) {
+                return;
+            }
             if (position == 0) {
                 tvLetterHeader.setText(letter);
                 tvLetterHeader.setVisibility(View.VISIBLE);
-            } else {
+            } else if (position > 0 && position <= products.size() - 1) {
                 Product prevProduct = products.get(position - 1);
                 if (!prevProduct.getFirstLetter().equals(letter)) {
                     tvLetterHeader.setText(letter);

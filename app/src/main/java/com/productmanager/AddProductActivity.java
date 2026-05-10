@@ -453,21 +453,26 @@ public class AddProductActivity extends AppCompatActivity {
         // 保存产品
         executorService.execute(() -> {
             Product product;
-            if (productId == -1) {
-                // 新增
+            boolean isNewProduct = (productId == -1);
+
+            if (isNewProduct) {
+                // 新增产品
                 product = new Product();
             } else {
-                // 编辑 - 使用已加载的 currentProduct
-                if (currentProduct != null) {
-                    product = currentProduct;
-                } else {
-                    // 如果 currentProduct 为空，尝试重新获取
-                    product = database.productDao().getProductById(productId);
-                    if (product == null) {
-                        // 产品不存在，创建新的
-                        product = new Product();
-                    }
+                // 编辑产品 - 必须使用已存在的产品
+                if (currentProduct == null) {
+                    currentProduct = database.productDao().getProductById(productId);
                 }
+                
+                if (currentProduct == null) {
+                    // 产品不存在，提示错误并返回
+                    runOnUiThread(() -> {
+                        Toast.makeText(this, "产品不存在，无法保存", Toast.LENGTH_SHORT).show();
+                        finish();
+                    });
+                    return;
+                }
+                product = currentProduct;
             }
 
             product.setName(name);
@@ -480,7 +485,7 @@ public class AddProductActivity extends AppCompatActivity {
                 product.setPhotoPath(currentPhotoPath);
             }
 
-            if (productId == -1) {
+            if (isNewProduct) {
                 database.productDao().insert(product);
             } else {
                 database.productDao().update(product);
