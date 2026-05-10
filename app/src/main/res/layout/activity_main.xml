@@ -85,32 +85,18 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent" />
 
-    <!-- 底部按钮容器 -->
-    <FrameLayout
-        android:id="@+id/bottom_button_container"
-        android:layout_width="0dp"
+    <!-- 添加按钮 - 居中显示 -->
+    <com.google.android.material.floatingactionbutton.FloatingActionButton
+        android:id="@+id/fab_add"
+        android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_marginBottom="24dp"
+        android:contentDescription="添加产品"
+        android:src="@drawable/ic_add"
+        app:backgroundTint="#2196F3"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toStartOf="@id/side_index_bar"
-        app:layout_constraintStart_toStartOf="parent">
-
-        <!-- 磨砂玻璃效果添加按钮 -->
-        <Button
-            android:id="@+id/btn_add"
-            android:layout_width="match_parent"
-            android:layout_height="52dp"
-            android:layout_marginStart="24dp"
-            android:layout_marginEnd="24dp"
-            android:background="@drawable/bg_frosted_button"
-            android:text="添加产品"
-            android:textColor="#FFFFFF"
-            android:textSize="16sp"
-            android:textStyle="bold"
-            android:drawableStart="@drawable/ic_add_white"
-            android:drawablePadding="8dp"
-            android:gravity="center" />
-
-    </FrameLayout>
+        app:layout_constraintStart_toStartOf="parent"
+        app:tint="#FFFFFF" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>

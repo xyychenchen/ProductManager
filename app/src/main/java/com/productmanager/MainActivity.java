@@ -9,7 +9,6 @@ import android.os.Vibrator;
 import android.text.Editable;
 import android.text.TextWatcher;
 import android.view.View;
-import android.widget.Button;
 import android.widget.EditText;
 import android.widget.TextView;
 
@@ -17,6 +16,7 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
+import com.google.android.material.floatingactionbutton.FloatingActionButton;
 import com.google.android.material.snackbar.Snackbar;
 
 import java.util.ArrayList;
@@ -38,12 +38,12 @@ public class MainActivity extends AppCompatActivity implements SideIndexBar.OnLe
     private EditText etSearch;
     private TextView tvEmptyView;
     private TextView tvOverlay;
-    private Button btnAdd;
+    private FloatingActionButton fabAdd;
 
     private ProductDatabase database;
     private ExecutorService executorService;
 
-    private List<Product> currentProducts = new ArrayList<>();  // 当前显示的产品列表
+    private List<Product> currentProducts = new ArrayList<>();
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -67,7 +67,7 @@ public class MainActivity extends AppCompatActivity implements SideIndexBar.OnLe
         setupSideIndexBar();
 
         // 设置添加按钮
-        setupAddButton();
+        setupFab();
 
         // 加载数据
         loadProducts();
@@ -79,7 +79,7 @@ public class MainActivity extends AppCompatActivity implements SideIndexBar.OnLe
         etSearch = findViewById(R.id.et_search);
         tvEmptyView = findViewById(R.id.tv_empty_view);
         tvOverlay = findViewById(R.id.tv_overlay);
-        btnAdd = findViewById(R.id.btn_add);
+        fabAdd = findViewById(R.id.fab_add);
     }
 
     private void setupRecyclerView() {
@@ -87,7 +87,6 @@ public class MainActivity extends AppCompatActivity implements SideIndexBar.OnLe
         recyclerView.setLayoutManager(new LinearLayoutManager(this));
         recyclerView.setAdapter(adapter);
 
-        // 点击编辑
         adapter.setOnProductClickListener(new ProductAdapter.OnProductClickListener() {
             @Override
             public void onProductClick(Product product) {
@@ -102,7 +101,6 @@ public class MainActivity extends AppCompatActivity implements SideIndexBar.OnLe
             }
         });
 
-        // 滚动监听，更新字母索引栏高亮
         recyclerView.addOnScrollListener(new RecyclerView.OnScrollListener() {
             @Override
             public void onScrolled(RecyclerView recyclerView, int dx, int dy) {
@@ -131,8 +129,8 @@ public class MainActivity extends AppCompatActivity implements SideIndexBar.OnLe
         sideIndexBar.setOnLetterSelectedListener(this);
     }
 
-    private void setupAddButton() {
-        btnAdd.setOnClickListener(v -> {
+    private void setupFab() {
+        fabAdd.setOnClickListener(v -> {
             // 触发震动反馈
             performHapticFeedback();
 
@@ -164,24 +162,17 @@ public class MainActivity extends AppCompatActivity implements SideIndexBar.OnLe
                 currentProducts = products;
                 adapter.setProducts(products);
                 updateEmptyView(products);
-
-                // 更新字母索引栏只显示有产品的首字母
                 updateSideIndexBar(usedLetters);
             });
         });
     }
 
-    /**
-     * 更新字母索引栏显示的字母
-     * 只显示有产品的首字母
-     */
     private void updateSideIndexBar(List<String> usedLetters) {
         if (usedLetters == null || usedLetters.isEmpty()) {
             sideIndexBar.setLetters(new ArrayList<>());
             return;
         }
 
-        // 过滤出有效的字母
         List<String> validLetters = new ArrayList<>();
         for (String letter : usedLetters) {
             if (letter != null && !letter.isEmpty()) {
@@ -189,7 +180,6 @@ public class MainActivity extends AppCompatActivity implements SideIndexBar.OnLe
             }
         }
 
-        // 去重
         Set<String> uniqueLetters = new HashSet<>(validLetters);
         validLetters = new ArrayList<>(uniqueLetters);
 
@@ -210,13 +200,10 @@ public class MainActivity extends AppCompatActivity implements SideIndexBar.OnLe
                 adapter.setProducts(products);
                 updateEmptyView(products);
 
-                // 搜索时也更新字母栏
                 if (keyword.isEmpty()) {
-                    // 恢复完整字母栏
                     List<String> usedLetters = database.productDao().getUsedLetters();
                     updateSideIndexBar(usedLetters);
                 } else {
-                    // 搜索结果对应的字母
                     Set<String> letters = new HashSet<>();
                     for (Product p : products) {
                         String firstLetter = p.getFirstLetter();
@@ -242,26 +229,20 @@ public class MainActivity extends AppCompatActivity implements SideIndexBar.OnLe
 
     @Override
     public void onLetterSelected(String letter) {
-        // 显示字母覆盖层
         tvOverlay.setText(letter);
         tvOverlay.setVisibility(View.VISIBLE);
-
-        // 滚动到对应位置
         scrollToLetter(letter);
     }
 
     @Override
     public void onLetterReleased() {
-        // 隐藏字母覆盖层
         tvOverlay.setVisibility(View.GONE);
     }
 
     private void scrollToLetter(String letter) {
-        // 在当前产品列表中找到第一个匹配的字母位置
         for (int i = 0; i < currentProducts.size(); i++) {
             Product product = currentProducts.get(i);
             if (product.getFirstLetter().equalsIgnoreCase(letter)) {
-                // 滚动到该位置
                 LinearLayoutManager layoutManager = (LinearLayoutManager) recyclerView.getLayoutManager();
                 if (layoutManager != null) {
                     layoutManager.scrollToPositionWithOffset(i, 0);
@@ -296,7 +277,7 @@ public class MainActivity extends AppCompatActivity implements SideIndexBar.OnLe
         executorService.execute(() -> {
             database.productDao().delete(product);
             runOnUiThread(() -> {
-                Snackbar.make(btnAdd, "已删除: " + product.getName(), Snackbar.LENGTH_SHORT).show();
+                Snackbar.make(fabAdd, "已删除: " + product.getName(), Snackbar.LENGTH_SHORT).show();
                 loadProducts();
             });
         });
