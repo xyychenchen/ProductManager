@@ -17,7 +17,9 @@ import com.google.android.material.floatingactionbutton.FloatingActionButton;
 import com.google.android.material.snackbar.Snackbar;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -37,6 +39,8 @@ public class MainActivity extends AppCompatActivity implements SideIndexBar.OnLe
     
     private ProductDatabase database;
     private ExecutorService executorService;
+    
+    private List<Product> currentProducts = new ArrayList<>();  // 当前显示的产品列表
     
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -134,11 +138,42 @@ public class MainActivity extends AppCompatActivity implements SideIndexBar.OnLe
     private void loadProducts() {
         executorService.execute(() -> {
             List<Product> products = database.productDao().getAllProducts();
+            List<String> usedLetters = database.productDao().getUsedLetters();
+            
             runOnUiThread(() -> {
+                currentProducts = products;
                 adapter.setProducts(products);
                 updateEmptyView(products);
+                
+                // 更新字母索引栏只显示有产品的首字母
+                updateSideIndexBar(usedLetters);
             });
         });
+    }
+    
+    /**
+     * 更新字母索引栏显示的字母
+     * 只显示有产品的首字母
+     */
+    private void updateSideIndexBar(List<String> usedLetters) {
+        if (usedLetters == null || usedLetters.isEmpty()) {
+            sideIndexBar.setLetters(new ArrayList<>());
+            return;
+        }
+        
+        // 过滤出有效的字母
+        List<String> validLetters = new ArrayList<>();
+        for (String letter : usedLetters) {
+            if (letter != null && !letter.isEmpty()) {
+                validLetters.add(letter.toUpperCase());
+            }
+        }
+        
+        // 去重
+        Set<String> uniqueLetters = new HashSet<>(validLetters);
+        validLetters = new ArrayList<>(uniqueLetters);
+        
+        sideIndexBar.setLetters(validLetters);
     }
     
     private void searchProducts(String keyword) {
@@ -149,9 +184,28 @@ public class MainActivity extends AppCompatActivity implements SideIndexBar.OnLe
             } else {
                 products = database.productDao().searchProducts(keyword);
             }
+            
             runOnUiThread(() -> {
+                currentProducts = products;
                 adapter.setProducts(products);
                 updateEmptyView(products);
+                
+                // 搜索时也更新字母栏
+                if (keyword.isEmpty()) {
+                    // 恢复完整字母栏
+                    List<String> usedLetters = database.productDao().getUsedLetters();
+                    updateSideIndexBar(usedLetters);
+                } else {
+                    // 搜索结果对应的字母
+                    Set<String> letters = new HashSet<>();
+                    for (Product p : products) {
+                        String firstLetter = p.getFirstLetter();
+                        if (firstLetter != null && !firstLetter.isEmpty()) {
+                            letters.add(firstLetter.toUpperCase());
+                        }
+                    }
+                    sideIndexBar.setLetters(new ArrayList<>(letters));
+                }
             });
         });
     }
@@ -183,37 +237,30 @@ public class MainActivity extends AppCompatActivity implements SideIndexBar.OnLe
     }
     
     private void scrollToLetter(String letter) {
-        LinearLayoutManager layoutManager = (LinearLayoutManager) recyclerView.getLayoutManager();
-        if (layoutManager == null) return;
-        
-        // 获取适配器中的产品列表
-        List<Product> products = new ArrayList<>();
-        for (int i = 0; i < adapter.getItemCount(); i++) {
-            // 这里需要从适配器获取产品列表
-        }
-        
-        // 找到第一个匹配的字母位置
-        executorService.execute(() -> {
-            List<Product> allProducts = database.productDao().getProductsByFirstLetter(letter);
-            if (!allProducts.isEmpty()) {
-                int targetId = allProducts.get(0).getId();
-                runOnUiThread(() -> {
-                    // 在当前显示的列表中找到位置
-                    for (int i = 0; i < adapter.getItemCount(); i++) {
-                        // 简化处理：滚动到顶部让用户看到
-                    }
-                });
+        // 在当前产品列表中找到第一个匹配的字母位置
+        for (int i = 0; i < currentProducts.size(); i++) {
+            Product product = currentProducts.get(i);
+            if (product.getFirstLetter().equalsIgnoreCase(letter)) {
+                // 滚动到该位置
+                LinearLayoutManager layoutManager = (LinearLayoutManager) recyclerView.getLayoutManager();
+                if (layoutManager != null) {
+                    layoutManager.scrollToPositionWithOffset(i, 0);
+                }
+                break;
             }
-        });
+        }
     }
     
     private void updateSideIndexHighlight() {
         LinearLayoutManager layoutManager = (LinearLayoutManager) recyclerView.getLayoutManager();
-        if (layoutManager == null) return;
+        if (layoutManager == null || currentProducts.isEmpty()) return;
         
         int firstVisiblePosition = layoutManager.findFirstVisibleItemPosition();
-        // 更新字母索引栏的高亮
-        // 这里需要获取当前位置的产品首字母
+        if (firstVisiblePosition >= 0 && firstVisiblePosition < currentProducts.size()) {
+            Product product = currentProducts.get(firstVisiblePosition);
+            String letter = product.getFirstLetter();
+            sideIndexBar.highlightLetter(letter);
+        }
     }
     
     private void showDeleteDialog(Product product) {
