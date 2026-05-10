@@ -11,6 +11,10 @@ import androidx.sqlite.db.SupportSQLiteDatabase;
 /**
  * 产品数据库
  * 使用Room持久化库管理SQLite数据库
+ *
+ * 数据库版本历史：
+ * - 版本1: 基础字段 (name, specification, size, price, photoPath, createTime, updateTime)
+ * - 版本2: 添加 material 和 script 字段
  */
 @Database(entities = {Product.class}, version = 2, exportSchema = false)
 public abstract class ProductDatabase extends RoomDatabase {
@@ -21,20 +25,24 @@ public abstract class ProductDatabase extends RoomDatabase {
 
     /**
      * 数据库迁移：从版本1到版本2
-     * 添加 material 和 script 字段
+     * 添加 material（材质）和 script（话术）字段
+     *
+     * 这是正确的迁移方式，会保留所有现有数据
      */
     private static final Migration MIGRATION_1_2 = new Migration(1, 2) {
         @Override
         public void migrate(SupportSQLiteDatabase database) {
-            // 添加 material 列（材质），默认为空
+            // ALTER TABLE ADD COLUMN 会自动给现有行的这个列设置为 NULL
             database.execSQL("ALTER TABLE products ADD COLUMN material TEXT");
-            // 添加 script 列（话术），默认为空
             database.execSQL("ALTER TABLE products ADD COLUMN script TEXT");
         }
     };
 
     /**
      * 获取数据库单例
+     *
+     * 重要：只使用 addMigrations，不使用 fallbackToDestructiveMigration
+     * 这样可以确保数据永远不会因为迁移问题而丢失
      */
     public static ProductDatabase getDatabase(final Context context) {
         if (INSTANCE == null) {
@@ -46,8 +54,8 @@ public abstract class ProductDatabase extends RoomDatabase {
                             "product_database"
                     )
                     .addMigrations(MIGRATION_1_2)
-                    // 只在降级时才允许重建数据库，升级时必须使用迁移
-                    .fallbackToDestructiveMigrationOnDowngrade()
+                    // 不使用 fallbackToDestructiveMigration
+                    // 这样如果迁移失败会抛出异常，而不是删除数据
                     .build();
                 }
             }
