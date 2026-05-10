@@ -14,7 +14,11 @@ import java.util.List;
  * 字母索引侧边栏
  * 类似通讯录的字母快速索引功能
  * 只显示已有产品的首字母
- * 字母从中间开始排列，固定间隔，整体居中
+ * 
+ * 设计理念（参考 FossifyOrg/Contacts）：
+ * - 固定的字母间距，不管有多少字母
+ * - 字母整体垂直居中
+ * - 间距舒适，有空间感
  */
 public class SideIndexBar extends View {
     
@@ -24,8 +28,11 @@ public class SideIndexBar extends View {
             "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "#"
     };
     
-    // 固定间隔（像素）
-    private static final float LETTER_SPACING = 42f;
+    // 字母间距（dp）- 舒适的间距，有空间感
+    private static final float LETTER_SPACING_DP = 20f;
+    
+    // 字母文字大小（sp）
+    private static final float LETTER_TEXT_SIZE_SP = 14f;
     
     // 当前显示的字母列表（动态）
     private List<String> currentLetters = new ArrayList<>();
@@ -34,6 +41,9 @@ public class SideIndexBar extends View {
     private Paint selectedPaint;
     private int selectedPosition = -1;
     private OnLetterSelectedListener listener;
+    
+    // 实际使用的间距（像素）
+    private float letterSpacing;
     
     public interface OnLetterSelectedListener {
         void onLetterSelected(String letter);
@@ -46,34 +56,42 @@ public class SideIndexBar extends View {
     
     public SideIndexBar(Context context) {
         super(context);
-        init();
+        init(context);
     }
     
     public SideIndexBar(Context context, AttributeSet attrs) {
         super(context, attrs);
-        init();
+        init(context);
     }
     
     public SideIndexBar(Context context, AttributeSet attrs, int defStyleAttr) {
         super(context, attrs, defStyleAttr);
-        init();
+        init(context);
     }
     
-    private void init() {
+    private void init(Context context) {
         // 默认显示所有字母
         for (String letter : ALL_LETTERS) {
             currentLetters.add(letter);
         }
         
+        // 将 dp 转换为像素
+        float density = context.getResources().getDisplayMetrics().density;
+        letterSpacing = LETTER_SPACING_DP * density;
+        
+        // 将 sp 转换为像素
+        float scaledDensity = context.getResources().getDisplayMetrics().scaledDensity;
+        float textSize = LETTER_TEXT_SIZE_SP * scaledDensity;
+        
         paint = new Paint();
         paint.setAntiAlias(true);
-        paint.setTextSize(36f);
+        paint.setTextSize(textSize);
         paint.setColor(0xFF666666);
         paint.setTextAlign(Paint.Align.CENTER);
         
         selectedPaint = new Paint();
         selectedPaint.setAntiAlias(true);
-        selectedPaint.setTextSize(40f);
+        selectedPaint.setTextSize(textSize * 1.15f);
         selectedPaint.setColor(0xFF2196F3);
         selectedPaint.setFakeBoldText(true);
         selectedPaint.setTextAlign(Paint.Align.CENTER);
@@ -124,10 +142,9 @@ public class SideIndexBar extends View {
         int letterCount = currentLetters.size();
         
         // 计算所有字母需要的总高度
-        float totalHeight = (letterCount - 1) * LETTER_SPACING;
+        float totalHeight = (letterCount - 1) * letterSpacing;
         
         // 计算起始Y位置（使字母整体居中）
-        // 第一个字母的Y坐标应该在 view中心 - 总高度的一半
         float startY;
         if (letterCount == 1) {
             // 只有一个字母时，放在正中间
@@ -136,21 +153,25 @@ public class SideIndexBar extends View {
             startY = (getHeight() - totalHeight) / 2f;
         }
         
+        // 获取文字高度用于垂直居中
+        Paint.FontMetrics fm = paint.getFontMetrics();
+        float textOffset = (fm.descent - fm.ascent) / 2 - fm.descent;
+        
         // 绘制每个字母
         for (int i = 0; i < letterCount; i++) {
-            float y = startY + i * LETTER_SPACING;
+            float y = startY + i * letterSpacing;
             
             // 确保Y坐标在view范围内
-            if (y < LETTER_SPACING / 2) {
-                y = LETTER_SPACING / 2;
-            } else if (y > getHeight() - LETTER_SPACING / 2) {
-                y = getHeight() - LETTER_SPACING / 2;
+            if (y < letterSpacing / 2) {
+                y = letterSpacing / 2;
+            } else if (y > getHeight() - letterSpacing / 2) {
+                y = getHeight() - letterSpacing / 2;
             }
             
             if (i == selectedPosition) {
-                canvas.drawText(currentLetters.get(i), centerX, y, selectedPaint);
+                canvas.drawText(currentLetters.get(i), centerX, y + textOffset, selectedPaint);
             } else {
-                canvas.drawText(currentLetters.get(i), centerX, y, paint);
+                canvas.drawText(currentLetters.get(i), centerX, y + textOffset, paint);
             }
         }
     }
@@ -162,7 +183,7 @@ public class SideIndexBar extends View {
         }
         
         int letterCount = currentLetters.size();
-        float totalHeight = (letterCount - 1) * LETTER_SPACING;
+        float totalHeight = (letterCount - 1) * letterSpacing;
         float startY;
         if (letterCount == 1) {
             startY = getHeight() / 2f;
@@ -175,9 +196,9 @@ public class SideIndexBar extends View {
         // 计算触摸位置对应的字母索引
         int position = -1;
         for (int i = 0; i < letterCount; i++) {
-            float letterY = startY + i * LETTER_SPACING;
+            float letterY = startY + i * letterSpacing;
             // 检查触摸点是否在这个字母的范围内
-            float halfSpacing = LETTER_SPACING / 2;
+            float halfSpacing = letterSpacing / 2;
             if (y >= letterY - halfSpacing && y < letterY + halfSpacing) {
                 position = i;
                 break;
