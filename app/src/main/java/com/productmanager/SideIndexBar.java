@@ -14,6 +14,7 @@ import java.util.List;
  * 字母索引侧边栏
  * 类似通讯录的字母快速索引功能
  * 只显示已有产品的首字母
+ * 字母从中间开始排列，固定间隔，整体居中
  */
 public class SideIndexBar extends View {
     
@@ -22,6 +23,9 @@ public class SideIndexBar extends View {
             "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M",
             "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "#"
     };
+    
+    // 固定间隔（像素）
+    private static final float LETTER_SPACING = 42f;
     
     // 当前显示的字母列表（动态）
     private List<String> currentLetters = new ArrayList<>();
@@ -116,11 +120,32 @@ public class SideIndexBar extends View {
             return;
         }
         
-        float itemHeight = getHeight() / (float) currentLetters.size();
         float centerX = getWidth() / 2f;
+        int letterCount = currentLetters.size();
         
-        for (int i = 0; i < currentLetters.size(); i++) {
-            float y = itemHeight * (i + 0.8f);
+        // 计算所有字母需要的总高度
+        float totalHeight = (letterCount - 1) * LETTER_SPACING;
+        
+        // 计算起始Y位置（使字母整体居中）
+        // 第一个字母的Y坐标应该在 view中心 - 总高度的一半
+        float startY;
+        if (letterCount == 1) {
+            // 只有一个字母时，放在正中间
+            startY = getHeight() / 2f;
+        } else {
+            startY = (getHeight() - totalHeight) / 2f;
+        }
+        
+        // 绘制每个字母
+        for (int i = 0; i < letterCount; i++) {
+            float y = startY + i * LETTER_SPACING;
+            
+            // 确保Y坐标在view范围内
+            if (y < LETTER_SPACING / 2) {
+                y = LETTER_SPACING / 2;
+            } else if (y > getHeight() - LETTER_SPACING / 2) {
+                y = getHeight() - LETTER_SPACING / 2;
+            }
             
             if (i == selectedPosition) {
                 canvas.drawText(currentLetters.get(i), centerX, y, selectedPaint);
@@ -136,15 +161,41 @@ public class SideIndexBar extends View {
             return false;
         }
         
-        float itemHeight = getHeight() / (float) currentLetters.size();
-        float y = event.getY();
-        int position = (int) (y / itemHeight);
-        
-        if (position < 0) {
-            position = 0;
-        } else if (position >= currentLetters.size()) {
-            position = currentLetters.size() - 1;
+        int letterCount = currentLetters.size();
+        float totalHeight = (letterCount - 1) * LETTER_SPACING;
+        float startY;
+        if (letterCount == 1) {
+            startY = getHeight() / 2f;
+        } else {
+            startY = (getHeight() - totalHeight) / 2f;
         }
+        
+        float y = event.getY();
+        
+        // 计算触摸位置对应的字母索引
+        int position = -1;
+        for (int i = 0; i < letterCount; i++) {
+            float letterY = startY + i * LETTER_SPACING;
+            // 检查触摸点是否在这个字母的范围内
+            float halfSpacing = LETTER_SPACING / 2;
+            if (y >= letterY - halfSpacing && y < letterY + halfSpacing) {
+                position = i;
+                break;
+            }
+        }
+        
+        // 如果没有精确匹配，找最近的字母
+        if (position == -1) {
+            if (y < startY) {
+                position = 0;
+            } else {
+                position = letterCount - 1;
+            }
+        }
+        
+        // 确保位置有效
+        if (position < 0) position = 0;
+        if (position >= letterCount) position = letterCount - 1;
         
         switch (event.getAction()) {
             case MotionEvent.ACTION_DOWN:
