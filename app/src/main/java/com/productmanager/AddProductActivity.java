@@ -9,10 +9,8 @@ import android.graphics.BitmapFactory;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
-import android.os.Environment;
 import android.provider.MediaStore;
 import android.text.TextUtils;
-import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.ImageView;
@@ -42,9 +40,10 @@ import java.util.concurrent.Executors;
  */
 public class AddProductActivity extends AppCompatActivity {
     
-    private static final int REQUEST_PERMISSION = 100;
-    private static final int REQUEST_PICK_IMAGE = 101;
-    private static final int REQUEST_TAKE_PHOTO = 102;
+    private static final int REQUEST_STORAGE_PERMISSION = 100;
+    private static final int REQUEST_CAMERA_PERMISSION = 101;
+    private static final int REQUEST_PICK_IMAGE = 102;
+    private static final int REQUEST_TAKE_PHOTO = 103;
     
     private MaterialToolbar toolbar;
     private ImageView ivPhoto;
@@ -60,7 +59,7 @@ public class AddProductActivity extends AppCompatActivity {
     private int productId = -1;  // -1表示新增，其他表示编辑
     private Product currentProduct;
     private String currentPhotoPath;
-    private Uri cameraImageUri;  // 相机拍照临时URI
+    private String cameraPhotoPath;  // 相机拍照的实际文件路径
     
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -125,18 +124,10 @@ public class AddProductActivity extends AppCompatActivity {
                 .setItems(options, (dialog, which) -> {
                     if (which == 0) {
                         // 拍照
-                        if (checkCameraPermission()) {
-                            takePhoto();
-                        } else {
-                            requestCameraPermission();
-                        }
+                        checkAndTakePhoto();
                     } else {
                         // 从相册选择
-                        if (checkStoragePermission()) {
-                            pickImage();
-                        } else {
-                            requestStoragePermission();
-                        }
+                        checkAndPickImage();
                     }
                 })
                 .show();
@@ -146,7 +137,7 @@ public class AddProductActivity extends AppCompatActivity {
         btnSave.setOnClickListener(v -> saveProduct());
     }
     
-    // ============ 权限检查 ============
+    // ============ 权限检查和请求 ============
     
     private boolean checkStoragePermission() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -163,32 +154,59 @@ public class AddProductActivity extends AppCompatActivity {
                 == PackageManager.PERMISSION_GRANTED;
     }
     
+    /**
+     * 检查权限并从相册选择
+     */
+    private void checkAndPickImage() {
+        if (checkStoragePermission()) {
+            pickImage();
+        } else {
+            requestStoragePermission();
+        }
+    }
+    
+    /**
+     * 检查权限并拍照
+     */
+    private void checkAndTakePhoto() {
+        if (checkCameraPermission()) {
+            takePhoto();
+        } else {
+            requestCameraPermission();
+        }
+    }
+    
     private void requestStoragePermission() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             ActivityCompat.requestPermissions(this, 
-                    new String[]{Manifest.permission.READ_MEDIA_IMAGES}, REQUEST_PERMISSION);
+                    new String[]{Manifest.permission.READ_MEDIA_IMAGES}, REQUEST_STORAGE_PERMISSION);
         } else {
             ActivityCompat.requestPermissions(this, 
-                    new String[]{Manifest.permission.READ_EXTERNAL_STORAGE}, REQUEST_PERMISSION);
+                    new String[]{Manifest.permission.READ_EXTERNAL_STORAGE}, REQUEST_STORAGE_PERMISSION);
         }
     }
     
     private void requestCameraPermission() {
         ActivityCompat.requestPermissions(this, 
-                new String[]{Manifest.permission.CAMERA, Manifest.permission.WRITE_EXTERNAL_STORAGE}, 
-                REQUEST_PERMISSION);
+                new String[]{Manifest.permission.CAMERA}, 
+                REQUEST_CAMERA_PERMISSION);
     }
     
     @Override
     public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-        if (requestCode == REQUEST_PERMISSION) {
-            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                // 权限获取成功，重新显示选择对话框
-                showPhotoChooseDialog();
-            } else {
-                Toast.makeText(this, "需要相应权限才能继续操作", Toast.LENGTH_SHORT).show();
+        
+        if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+            // 权限获取成功，直接执行用户选择的操作
+            if (requestCode == REQUEST_STORAGE_PERMISSION) {
+                // 相册权限，直接打开相册
+                pickImage();
+            } else if (requestCode == REQUEST_CAMERA_PERMISSION) {
+                // 相机权限，直接打开相机
+                takePhoto();
             }
+        } else {
+            Toast.makeText(this, "需要相应权限才能继续操作", Toast.LENGTH_SHORT).show();
         }
     }
     
@@ -200,10 +218,16 @@ public class AddProductActivity extends AppCompatActivity {
             // 创建临时文件保存拍照结果
             File photoFile = createImageFile();
             if (photoFile != null) {
-                cameraImageUri = FileProvider.getUriForFile(this,
+                cameraPhotoPath = photoFile.getAbsolutePath();  // 保存实际文件路径
+                
+                Uri photoUri = FileProvider.getUriForFile(this,
                         "com.productmanager.fileprovider",
                         photoFile);
-                takePictureIntent.putExtra(MediaStore.EXTRA_OUTPUT, cameraImageUri);
+                takePictureIntent.putExtra(MediaStore.EXTRA_OUTPUT, photoUri);
+                
+                // 给 Intent 添加读取权限
+                takePictureIntent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                
                 startActivityForResult(takePictureIntent, REQUEST_TAKE_PHOTO);
             }
         }
@@ -250,8 +274,8 @@ public class AddProductActivity extends AppCompatActivity {
                 break;
                 
             case REQUEST_TAKE_PHOTO:
-                // 拍照
-                if (cameraImageUri != null) {
+                // 拍照 - 直接使用保存的文件路径
+                if (cameraPhotoPath != null) {
                     handleTakenPhoto();
                 }
                 break;
@@ -269,15 +293,18 @@ public class AddProductActivity extends AppCompatActivity {
                 inputStream.close();
             }
             
-            // 保存图片到应用私有目录
-            currentPhotoPath = saveBitmapToFile(bitmap);
-            
-            // 显示图片
-            Glide.with(this)
-                    .load(new File(currentPhotoPath))
-                    .centerCrop()
-                    .into(ivPhoto);
-            
+            if (bitmap != null) {
+                // 保存图片到应用私有目录
+                currentPhotoPath = saveBitmapToFile(bitmap);
+                
+                // 显示图片
+                if (currentPhotoPath != null) {
+                    Glide.with(this)
+                            .load(new File(currentPhotoPath))
+                            .centerCrop()
+                            .into(ivPhoto);
+                }
+            }
         } catch (Exception e) {
             e.printStackTrace();
             Toast.makeText(this, "图片加载失败", Toast.LENGTH_SHORT).show();
@@ -289,25 +316,23 @@ public class AddProductActivity extends AppCompatActivity {
      */
     private void handleTakenPhoto() {
         try {
-            // 获取拍照后的图片
-            Bitmap bitmap = BitmapFactory.decodeFile(cameraImageUri.getPath());
+            File photoFile = new File(cameraPhotoPath);
             
-            if (bitmap != null) {
-                // 压缩并保存
-                currentPhotoPath = saveBitmapToFile(bitmap);
+            if (photoFile.exists()) {
+                // 直接使用拍照保存的文件作为产品图片
+                currentPhotoPath = cameraPhotoPath;
                 
                 // 显示图片
                 Glide.with(this)
-                        .load(new File(currentPhotoPath))
+                        .load(photoFile)
                         .centerCrop()
                         .into(ivPhoto);
-                
-                // 删除临时URI指向的原始文件（已压缩保存到新位置）
-                new File(cameraImageUri.getPath()).delete();
+            } else {
+                Toast.makeText(this, "照片保存失败", Toast.LENGTH_SHORT).show();
             }
         } catch (Exception e) {
             e.printStackTrace();
-            Toast.makeText(this, "图片保存失败", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, "图片加载失败", Toast.LENGTH_SHORT).show();
         }
     }
     
