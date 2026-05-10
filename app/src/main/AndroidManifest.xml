@@ -3,17 +3,20 @@
     xmlns:tools="http://schemas.android.com/tools">
 
     <!-- 存储权限 -->
-    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" 
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
         android:maxSdkVersion="32" />
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
         android:maxSdkVersion="28"
         tools:ignore="ScopedStorage" />
-    
+
     <!-- 相机权限 -->
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-feature android:name="android.hardware.camera" android:required="false" />
     <uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />
+
+    <!-- 震动权限（用于按钮点击反馈） -->
+    <uses-permission android:name="android.permission.VIBRATE" />
 
     <application
         android:allowBackup="true"
@@ -23,7 +26,7 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.ProductManager"
         tools:targetApi="34">
-        
+
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -34,13 +37,13 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
-        
+
         <activity
             android:name=".AddProductActivity"
             android:exported="false"
             android:label="@string/add_product"
             android:theme="@style/Theme.ProductManager" />
-        
+
         <!-- FileProvider 用于拍照临时文件共享 -->
         <provider
             android:name="androidx.core.content.FileProvider"
@@ -51,7 +54,7 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/file_paths" />
         </provider>
-            
+
     </application>
 
 </manifest>
