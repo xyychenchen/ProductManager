@@ -125,6 +125,59 @@
 
             </androidx.cardview.widget.CardView>
 
+            <!-- 数据管理 -->
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="24dp"
+                android:text="数据管理"
+                android:textColor="#999999"
+                android:textSize="14sp" />
+
+            <!-- 导出数据 -->
+            <androidx.cardview.widget.CardView
+                android:id="@+id/card_export"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                app:cardCornerRadius="8dp"
+                app:cardElevation="2dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:background="#FFFFFF"
+                    android:orientation="horizontal"
+                    android:padding="16dp">
+
+                    <ImageView
+                        android:layout_width="24dp"
+                        android:layout_height="24dp"
+                        android:layout_gravity="center_vertical"
+                        android:src="@drawable/ic_export"
+                        app:tint="#FF9800" />
+
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_gravity="center_vertical"
+                        android:layout_marginStart="16dp"
+                        android:layout_weight="1"
+                        android:text="导出数据到CSV"
+                        android:textColor="#333333"
+                        android:textSize="16sp" />
+
+                    <ImageView
+                        android:layout_width="20dp"
+                        android:layout_height="20dp"
+                        android:layout_gravity="center_vertical"
+                        android:src="@drawable/ic_arrow_right"
+                        app:tint="#CCCCCC" />
+
+                </LinearLayout>
+
+            </androidx.cardview.widget.CardView>
+
             <!-- 版本信息 -->
             <TextView
                 android:layout_width="wrap_content"
