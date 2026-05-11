@@ -41,11 +41,12 @@
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintTop_toTopOf="parent">
 
-        <!-- 设置按钮 - 字母栏最上方 -->
+        <!-- 设置按钮 - 字母栏最上方，与搜索栏中心对齐 -->
         <ImageView
             android:id="@+id/iv_settings"
             android:layout_width="44dp"
-            android:layout_height="56dp"
+            android:layout_height="48dp"
+            android:layout_marginTop="12dp"
             android:padding="6dp"
             android:background="?attr/selectableItemBackgroundBorderless"
             android:src="@drawable/ic_settings"
