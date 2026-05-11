@@ -44,6 +44,12 @@
             android:label="@string/add_product"
             android:theme="@style/Theme.ProductManager" />
 
+        <activity
+            android:name=".SettingsActivity"
+            android:exported="false"
+            android:label="设置"
+            android:theme="@style/Theme.ProductManager" />
+
         <!-- FileProvider 用于拍照临时文件共享 -->
         <provider
             android:name="androidx.core.content.FileProvider"

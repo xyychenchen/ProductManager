@@ -54,6 +54,7 @@ public class AddProductActivity extends AppCompatActivity {
     private EditText etSize;
     private EditText etMaterial;
     private EditText etPrice;
+    private EditText etRemark;
     private EditText etScript;
     private Button btnSave;
 
@@ -103,6 +104,7 @@ public class AddProductActivity extends AppCompatActivity {
         etSize = findViewById(R.id.et_size);
         etMaterial = findViewById(R.id.et_material);
         etPrice = findViewById(R.id.et_price);
+        etRemark = findViewById(R.id.et_remark);
         etScript = findViewById(R.id.et_script);
         btnSave = findViewById(R.id.btn_save);
     }
@@ -395,6 +397,7 @@ public class AddProductActivity extends AppCompatActivity {
                     etSpecification.setText(currentProduct.getSpecification() != null ? currentProduct.getSpecification() : "");
                     etSize.setText(currentProduct.getSize() != null ? currentProduct.getSize() : "");
                     etMaterial.setText(currentProduct.getMaterial() != null ? currentProduct.getMaterial() : "");
+                    etRemark.setText(currentProduct.getRemark() != null ? currentProduct.getRemark() : "");
                     etScript.setText(currentProduct.getScript() != null ? currentProduct.getScript() : "");
                     
                     if (currentProduct.getPrice() != 0) {
@@ -429,6 +432,7 @@ public class AddProductActivity extends AppCompatActivity {
         String size = etSize.getText().toString().trim();
         String material = etMaterial.getText().toString().trim();
         String priceStr = etPrice.getText().toString().trim();
+        String remark = etRemark.getText().toString().trim();
         String script = etScript.getText().toString().trim();
 
         // 验证必填项
@@ -479,6 +483,7 @@ public class AddProductActivity extends AppCompatActivity {
             product.setSpecification(specification);
             product.setSize(size);
             product.setMaterial(material);
+            product.setRemark(remark);
             product.setPrice(price);
             product.setScript(script);
             if (currentPhotoPath != null) {

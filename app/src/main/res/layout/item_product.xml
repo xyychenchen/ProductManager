@@ -61,7 +61,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:ellipsize="end"
-                android:maxLines="2"
+                android:maxLines="3"
                 android:textColor="#333333"
                 android:textSize="16sp"
                 android:textStyle="bold"
@@ -74,7 +74,7 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="2dp"
                 android:ellipsize="end"
-                android:maxLines="1"
+                android:maxLines="2"
                 android:textColor="#888888"
                 android:textSize="13sp"
                 android:visibility="gone"
@@ -107,6 +107,20 @@
                 android:textSize="13sp"
                 android:visibility="gone"
                 tools:text="材质: 纯棉"
+                tools:visibility="visible" />
+
+            <!-- 备注 -->
+            <TextView
+                android:id="@+id/tv_remark"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:ellipsize="end"
+                android:maxLines="2"
+                android:textColor="#888888"
+                android:textSize="13sp"
+                android:visibility="gone"
+                tools:text="备注: 这是备注内容"
                 tools:visibility="visible" />
 
         </LinearLayout>

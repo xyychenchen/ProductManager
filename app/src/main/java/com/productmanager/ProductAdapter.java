@@ -64,6 +64,7 @@ public class ProductAdapter extends RecyclerView.Adapter<ProductAdapter.ProductV
         private TextView tvSpecification;
         private TextView tvSize;
         private TextView tvMaterial;
+        private TextView tvRemark;
         private TextView tvPrice;
         private TextView tvLetterHeader;
 
@@ -74,6 +75,7 @@ public class ProductAdapter extends RecyclerView.Adapter<ProductAdapter.ProductV
             tvSpecification = itemView.findViewById(R.id.tv_specification);
             tvSize = itemView.findViewById(R.id.tv_size);
             tvMaterial = itemView.findViewById(R.id.tv_material);
+            tvRemark = itemView.findViewById(R.id.tv_remark);
             tvPrice = itemView.findViewById(R.id.tv_price);
             tvLetterHeader = itemView.findViewById(R.id.tv_letter_header);
 
@@ -123,6 +125,15 @@ public class ProductAdapter extends RecyclerView.Adapter<ProductAdapter.ProductV
                 tvMaterial.setVisibility(View.VISIBLE);
             } else {
                 tvMaterial.setVisibility(View.GONE);
+            }
+
+            // 设置备注（添加空值检查）
+            String remark = product.getRemark();
+            if (remark != null && !remark.isEmpty()) {
+                tvRemark.setText("备注: " + remark);
+                tvRemark.setVisibility(View.VISIBLE);
+            } else {
+                tvRemark.setVisibility(View.GONE);
             }
 
             // 设置价格（美金格式）

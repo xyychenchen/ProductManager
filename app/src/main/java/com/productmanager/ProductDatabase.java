@@ -15,8 +15,9 @@ import androidx.sqlite.db.SupportSQLiteDatabase;
  * 数据库版本历史：
  * - 版本1: 基础字段 (name, specification, size, price, photoPath, createTime, updateTime)
  * - 版本2: 添加 material 和 script 字段
+ * - 版本3: 添加 remark（备注）字段
  */
-@Database(entities = {Product.class}, version = 2, exportSchema = false)
+@Database(entities = {Product.class}, version = 3, exportSchema = false)
 public abstract class ProductDatabase extends RoomDatabase {
 
     private static volatile ProductDatabase INSTANCE;
@@ -39,6 +40,17 @@ public abstract class ProductDatabase extends RoomDatabase {
     };
 
     /**
+     * 数据库迁移：从版本2到版本3
+     * 添加 remark（备注）字段
+     */
+    private static final Migration MIGRATION_2_3 = new Migration(2, 3) {
+        @Override
+        public void migrate(SupportSQLiteDatabase database) {
+            database.execSQL("ALTER TABLE products ADD COLUMN remark TEXT");
+        }
+    };
+
+    /**
      * 获取数据库单例
      *
      * 重要：只使用 addMigrations，不使用 fallbackToDestructiveMigration
@@ -53,7 +65,7 @@ public abstract class ProductDatabase extends RoomDatabase {
                             ProductDatabase.class,
                             "product_database"
                     )
-                    .addMigrations(MIGRATION_1_2)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
                     // 不使用 fallbackToDestructiveMigration
                     // 这样如果迁移失败会抛出异常，而不是删除数据
                     .build();

@@ -5,7 +5,7 @@ import androidx.room.PrimaryKey;
 
 /**
  * 产品数据模型
- * 用于存储产品信息：名称、规格、尺寸、材质、价格、照片、话术
+ * 用于存储产品信息：名称、规格、尺寸、材质、备注、价格、照片、话术
  */
 @Entity(tableName = "products")
 public class Product {
@@ -17,6 +17,7 @@ public class Product {
     private String specification;  // 规格
     private String size;           // 尺寸
     private String material;       // 材质
+    private String remark;         // 备注（显示在主页列表）
     private double price;          // 价格（美金）
     private String photoPath;      // 产品照片路径
     private String script;         // 产品话术（不显示在主页列表）
@@ -71,6 +72,15 @@ public class Product {
 
     public void setMaterial(String material) {
         this.material = material;
+        this.updateTime = System.currentTimeMillis();
+    }
+
+    public String getRemark() {
+        return remark;
+    }
+
+    public void setRemark(String remark) {
+        this.remark = remark;
         this.updateTime = System.currentTimeMillis();
     }
 
