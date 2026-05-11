@@ -8,17 +8,15 @@ import android.os.VibrationEffect;
 import android.os.Vibrator;
 import android.text.Editable;
 import android.text.TextWatcher;
-import android.view.Menu;
-import android.view.MenuItem;
 import android.view.View;
 import android.widget.EditText;
+import android.widget.ImageView;
 import android.widget.TextView;
 
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
-import com.google.android.material.appbar.MaterialToolbar;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
 import com.google.android.material.snackbar.Snackbar;
 
@@ -38,7 +36,7 @@ public class MainActivity extends AppCompatActivity implements SideIndexBar.OnLe
     private RecyclerView recyclerView;
     private ProductAdapter adapter;
     private SideIndexBar sideIndexBar;
-    private MaterialToolbar toolbar;
+    private ImageView ivSettings;
     private EditText etSearch;
     private TextView tvEmptyView;
     private TextView tvOverlay;
@@ -78,16 +76,19 @@ public class MainActivity extends AppCompatActivity implements SideIndexBar.OnLe
     }
 
     private void initViews() {
-        toolbar = findViewById(R.id.toolbar);
         recyclerView = findViewById(R.id.recycler_view);
         sideIndexBar = findViewById(R.id.side_index_bar);
         etSearch = findViewById(R.id.et_search);
         tvEmptyView = findViewById(R.id.tv_empty_view);
         tvOverlay = findViewById(R.id.tv_overlay);
         fabAdd = findViewById(R.id.fab_add);
+        ivSettings = findViewById(R.id.iv_settings);
         
-        // 设置 Toolbar
-        setSupportActionBar(toolbar);
+        // 设置按钮点击事件
+        ivSettings.setOnClickListener(v -> {
+            Intent intent = new Intent(MainActivity.this, SettingsActivity.class);
+            startActivity(intent);
+        });
     }
 
     private void setupRecyclerView() {
@@ -295,22 +296,6 @@ public class MainActivity extends AppCompatActivity implements SideIndexBar.OnLe
     protected void onResume() {
         super.onResume();
         loadProducts();
-    }
-
-    @Override
-    public boolean onCreateOptionsMenu(Menu menu) {
-        getMenuInflater().inflate(R.menu.menu_main, menu);
-        return true;
-    }
-
-    @Override
-    public boolean onOptionsItemSelected(MenuItem item) {
-        if (item.getItemId() == R.id.action_settings) {
-            Intent intent = new Intent(MainActivity.this, SettingsActivity.class);
-            startActivity(intent);
-            return true;
-        }
-        return super.onOptionsItemSelected(item);
     }
 
     @Override
