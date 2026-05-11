@@ -8,59 +8,58 @@
     android:background="#FAFAFA"
     tools:context=".MainActivity">
 
-    <!-- 搜索栏和设置按钮 -->
-    <LinearLayout
-        android:id="@+id/search_container"
+    <!-- 搜索栏 -->
+    <EditText
+        android:id="@+id/et_search"
         android:layout_width="0dp"
-        android:layout_height="wrap_content"
+        android:layout_height="48dp"
         android:layout_margin="12dp"
-        android:orientation="horizontal"
-        android:gravity="center_vertical"
-        app:layout_constraintEnd_toStartOf="@id/side_index_bar"
+        android:background="@drawable/bg_search"
+        android:drawableStart="@drawable/ic_search"
+        android:drawablePadding="8dp"
+        android:hint="搜索产品..."
+        android:inputType="text"
+        android:maxLines="1"
+        android:paddingStart="16dp"
+        android:paddingEnd="16dp"
+        android:textColor="#333333"
+        android:textColorHint="#999999"
+        android:textSize="16sp"
+        app:layout_constraintEnd_toStartOf="@id/right_panel"
         app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <!-- 右侧面板：设置按钮 + 字母索引栏 -->
+    <LinearLayout
+        android:id="@+id/right_panel"
+        android:layout_width="wrap_content"
+        android:layout_height="0dp"
+        android:layout_marginEnd="4dp"
+        android:orientation="vertical"
+        android:gravity="center_horizontal"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintTop_toTopOf="parent">
 
-        <!-- 搜索栏 -->
-        <EditText
-            android:id="@+id/et_search"
-            android:layout_width="0dp"
-            android:layout_height="48dp"
-            android:layout_weight="1"
-            android:background="@drawable/bg_search"
-            android:drawableStart="@drawable/ic_search"
-            android:drawablePadding="8dp"
-            android:hint="搜索产品..."
-            android:inputType="text"
-            android:maxLines="1"
-            android:paddingStart="16dp"
-            android:paddingEnd="16dp"
-            android:textColor="#333333"
-            android:textColorHint="#999999"
-            android:textSize="16sp" />
-
-        <!-- 设置按钮 -->
+        <!-- 设置按钮 - 字母栏最上方 -->
         <ImageView
             android:id="@+id/iv_settings"
-            android:layout_width="40dp"
-            android:layout_height="40dp"
-            android:layout_marginStart="8dp"
-            android:padding="8dp"
+            android:layout_width="36dp"
+            android:layout_height="44dp"
+            android:padding="10dp"
             android:background="?attr/selectableItemBackgroundBorderless"
             android:src="@drawable/ic_settings"
             android:contentDescription="设置"
             app:tint="#666666" />
 
-    </LinearLayout>
+        <!-- 字母索引侧边栏 -->
+        <com.productmanager.SideIndexBar
+            android:id="@+id/side_index_bar"
+            android:layout_width="36dp"
+            android:layout_height="0dp"
+            android:layout_weight="1" />
 
-    <!-- 字母索引侧边栏 -->
-    <com.productmanager.SideIndexBar
-        android:id="@+id/side_index_bar"
-        android:layout_width="36dp"
-        android:layout_height="0dp"
-        android:layout_marginEnd="4dp"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintTop_toTopOf="parent" />
+    </LinearLayout>
 
     <!-- 产品列表 -->
     <androidx.recyclerview.widget.RecyclerView
@@ -71,9 +70,9 @@
         android:clipToPadding="false"
         android:paddingBottom="80dp"
         app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintEnd_toStartOf="@id/side_index_bar"
+        app:layout_constraintEnd_toStartOf="@id/right_panel"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/search_container"
+        app:layout_constraintTop_toBottomOf="@id/et_search"
         tools:listitem="@layout/item_product" />
 
     <!-- 空视图 -->
@@ -88,9 +87,9 @@
         android:textSize="16sp"
         android:visibility="gone"
         app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintEnd_toStartOf="@id/side_index_bar"
+        app:layout_constraintEnd_toStartOf="@id/right_panel"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/search_container" />
+        app:layout_constraintTop_toBottomOf="@id/et_search" />
 
     <!-- 字母覆盖层 -->
     <TextView
@@ -104,7 +103,7 @@
         android:textStyle="bold"
         android:visibility="gone"
         app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintEnd_toStartOf="@id/side_index_bar"
+        app:layout_constraintEnd_toStartOf="@id/right_panel"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent" />
 
@@ -119,7 +118,7 @@
         android:src="@drawable/ic_add"
         app:backgroundTint="#2196F3"
         app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintEnd_toStartOf="@id/side_index_bar"
+        app:layout_constraintEnd_toStartOf="@id/right_panel"
         app:tint="#FFFFFF" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>
