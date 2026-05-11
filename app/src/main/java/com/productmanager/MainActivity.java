@@ -18,6 +18,7 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
+import com.google.android.material.appbar.MaterialToolbar;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
 import com.google.android.material.snackbar.Snackbar;
 
@@ -37,6 +38,7 @@ public class MainActivity extends AppCompatActivity implements SideIndexBar.OnLe
     private RecyclerView recyclerView;
     private ProductAdapter adapter;
     private SideIndexBar sideIndexBar;
+    private MaterialToolbar toolbar;
     private EditText etSearch;
     private TextView tvEmptyView;
     private TextView tvOverlay;
@@ -76,12 +78,16 @@ public class MainActivity extends AppCompatActivity implements SideIndexBar.OnLe
     }
 
     private void initViews() {
+        toolbar = findViewById(R.id.toolbar);
         recyclerView = findViewById(R.id.recycler_view);
         sideIndexBar = findViewById(R.id.side_index_bar);
         etSearch = findViewById(R.id.et_search);
         tvEmptyView = findViewById(R.id.tv_empty_view);
         tvOverlay = findViewById(R.id.tv_overlay);
         fabAdd = findViewById(R.id.fab_add);
+        
+        // 设置 Toolbar
+        setSupportActionBar(toolbar);
     }
 
     private void setupRecyclerView() {

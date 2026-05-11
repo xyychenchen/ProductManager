@@ -8,6 +8,20 @@
     android:background="#FAFAFA"
     tools:context=".MainActivity">
 
+    <!-- 工具栏 -->
+    <com.google.android.material.appbar.MaterialToolbar
+        android:id="@+id/toolbar"
+        android:layout_width="0dp"
+        android:layout_height="?attr/actionBarSize"
+        android:background="#FFFFFF"
+        android:elevation="4dp"
+        app:layout_constraintEnd_toStartOf="@id/side_index_bar"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        app:title="产品管理"
+        app:titleCentered="true"
+        app:titleTextColor="#333333" />
+
     <!-- 搜索栏 -->
     <EditText
         android:id="@+id/et_search"
@@ -27,7 +41,7 @@
         android:textSize="16sp"
         app:layout_constraintEnd_toStartOf="@id/side_index_bar"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent" />
+        app:layout_constraintTop_toBottomOf="@id/toolbar" />
 
     <!-- 字母索引侧边栏 -->
     <com.productmanager.SideIndexBar
