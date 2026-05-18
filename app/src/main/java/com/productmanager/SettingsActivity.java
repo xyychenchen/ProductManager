@@ -2,6 +2,8 @@ package com.productmanager;
 
 import android.app.ProgressDialog;
 import android.content.Intent;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.net.Uri;
 import android.os.Bundle;
 import android.widget.TextView;
@@ -11,21 +13,32 @@ import androidx.appcompat.app.AppCompatActivity;
 
 import com.google.android.material.appbar.MaterialToolbar;
 
+import org.apache.poi.ss.usermodel.Cell;
+import org.apache.poi.ss.usermodel.CellStyle;
+import org.apache.poi.ss.usermodel.ClientAnchor;
+import org.apache.poi.ss.usermodel CreationHelper;
+import org.apache.poi.ss.usermodel.Drawing;
+import org.apache.poi.ss.usermodel.Font;
+import org.apache.poi.ss.usermodel.HorizontalAlignment;
+import org.apache.poi.ss.usermodel.Row;
+import org.apache.poi.ss.usermodel.Sheet;
+import org.apache.poi.ss.usermodel.VerticalAlignment;
+import org.apache.poi.ss.usermodel.Workbook;
+import org.apache.poi.ss.util.CellRangeAddress;
+import org.apache.poi.util.IOUtils;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+
 import java.io.BufferedInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.OutputStream;
-import java.io.PrintWriter;
 import java.text.SimpleDateFormat;
 import java.util.Date;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.zip.ZipEntry;
-import java.util.zip.ZipOutputStream;
 
 /**
  * 设置页面
@@ -99,7 +112,7 @@ public class SettingsActivity extends AppCompatActivity {
                         "• 产品照片拍摄与选择\n" +
                         "• 字母索引快速定位\n" +
                         "• 产品话术记录\n" +
-                        "• 数据导出（含图片）\n\n" +
+                        "• 数据导出Excel（含嵌入图片）\n\n" +
                         "开发者：xyychenchen")
                 .setPositiveButton("确定", null)
                 .show();
@@ -115,7 +128,7 @@ public class SettingsActivity extends AppCompatActivity {
     }
 
     /**
-     * 导出数据（包含图片的ZIP压缩包）
+     * 导出数据到Excel（包含嵌入图片）
      */
     private void exportData() {
         // 显示加载对话框
@@ -137,10 +150,10 @@ public class SettingsActivity extends AppCompatActivity {
                 }
 
                 // 使用 Storage Access Framework 让用户选择保存位置
-                String fileName = "products_" + new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(new Date()) + ".zip";
+                String fileName = "products_" + new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(new Date()) + ".xlsx";
                 Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
                 intent.addCategory(Intent.CATEGORY_OPENABLE);
-                intent.setType("application/zip");
+                intent.setType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
                 intent.putExtra(Intent.EXTRA_TITLE, fileName);
                 startActivityForResult(intent, REQUEST_EXPORT);
             });
@@ -160,7 +173,7 @@ public class SettingsActivity extends AppCompatActivity {
     }
 
     /**
-     * 将数据导出到指定URI（ZIP格式，包含CSV和图片）
+     * 将数据导出到指定URI（Excel格式，包含嵌入图片）
      */
     private void exportDataToUri(Uri uri) {
         progressDialog = new ProgressDialog(this);
@@ -177,99 +190,183 @@ public class SettingsActivity extends AppCompatActivity {
                     throw new Exception("无法打开文件");
                 }
 
-                ZipOutputStream zipOut = new ZipOutputStream(outputStream);
+                // 创建Excel工作簿
+                Workbook workbook = new XSSFWorkbook();
+                Sheet sheet = workbook.createSheet("产品列表");
 
-                // 创建CSV内容
-                StringBuilder csvContent = new StringBuilder();
-                csvContent.append("ID,产品名称,规格,尺寸,材质,备注,价格(美元),图片文件,话术,创建时间,更新时间\n");
+                // 创建样式
+                CellStyle headerStyle = workbook.createCellStyle();
+                headerStyle.setAlignment(HorizontalAlignment.CENTER);
+                headerStyle.setVerticalAlignment(VerticalAlignment.CENTER);
+                Font headerFont = workbook.createFont();
+                headerFont.setBold(true);
+                headerFont.setFontHeightInPoints((short) 12);
+                headerStyle.setFont(headerFont);
+
+                CellStyle cellStyle = workbook.createCellStyle();
+                cellStyle.setVerticalAlignment(VerticalAlignment.CENTER);
+                cellStyle.setWrapText(true);
+
+                // 创建表头
+                Row headerRow = sheet.createRow(0);
+                String[] headers = {"ID", "产品名称", "规格", "尺寸", "材质", "备注", "价格(美元)", "产品图片", "话术", "创建时间", "更新时间"};
+                for (int i = 0; i < headers.length; i++) {
+                    Cell cell = headerRow.createCell(i);
+                    cell.setCellValue(headers[i]);
+                    cell.setCellStyle(headerStyle);
+                }
+
+                // 设置列宽
+                sheet.setColumnWidth(0, 2000);   // ID
+                sheet.setColumnWidth(1, 8000);   // 产品名称
+                sheet.setColumnWidth(2, 6000);   // 规格
+                sheet.setColumnWidth(3, 4000);   // 尺寸
+                sheet.setColumnWidth(4, 4000);   // 材质
+                sheet.setColumnWidth(5, 6000);   // 备注
+                sheet.setColumnWidth(6, 3000);   // 价格
+                sheet.setColumnWidth(7, 5000);   // 图片
+                sheet.setColumnWidth(8, 10000);  // 话术
+                sheet.setColumnWidth(9, 5000);   // 创建时间
+                sheet.setColumnWidth(10, 5000);  // 更新时间
+
+                // 设置表头行高
+                headerRow.setHeightInPoints(25);
+
+                // 创建绘图对象用于添加图片
+                Drawing<?> drawing = sheet.createDrawingPatriarch();
+                CreationHelper helper = workbook.getCreationHelper();
 
                 SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault());
-                Map<String, String> imageMap = new HashMap<>(); // 原始路径 -> 新文件名映射
-                int imageIndex = 1;
-
-                // 第一遍：收集图片信息
-                for (Product product : products) {
-                    String photoPath = product.getPhotoPath();
-                    if (photoPath != null && !photoPath.isEmpty()) {
-                        File imageFile = new File(photoPath);
-                        if (imageFile.exists()) {
-                            String extension = "";
-                            int dotIndex = photoPath.lastIndexOf('.');
-                            if (dotIndex > 0) {
-                                extension = photoPath.substring(dotIndex);
-                            }
-                            String newFileName = "image_" + product.getId() + extension;
-                            imageMap.put(photoPath, newFileName);
-                        }
-                    }
-                }
-
-                // 第二遍：生成CSV内容
-                for (Product product : products) {
-                    StringBuilder line = new StringBuilder();
-                    line.append(escapeCSV(String.valueOf(product.getId()))).append(",");
-                    line.append(escapeCSV(product.getName())).append(",");
-                    line.append(escapeCSV(product.getSpecification())).append(",");
-                    line.append(escapeCSV(product.getSize())).append(",");
-                    line.append(escapeCSV(product.getMaterial())).append(",");
-                    line.append(escapeCSV(product.getRemark())).append(",");
-                    line.append(String.format(Locale.US, "%.2f", product.getPrice())).append(",");
-
-                    // 图片文件名
-                    String photoPath = product.getPhotoPath();
-                    String imageFileName = "";
-                    if (photoPath != null && !photoPath.isEmpty()) {
-                        imageFileName = imageMap.get(photoPath);
-                        if (imageFileName == null) {
-                            imageFileName = "";
-                        }
-                    }
-                    line.append(escapeCSV(imageFileName)).append(",");
-
-                    line.append(escapeCSV(product.getScript())).append(",");
-                    line.append(escapeCSV(product.getCreateTime() > 0 ? dateFormat.format(new Date(product.getCreateTime())) : "")).append(",");
-                    line.append(escapeCSV(product.getUpdateTime() > 0 ? dateFormat.format(new Date(product.getUpdateTime())) : ""));
-                    csvContent.append(line.toString()).append("\n");
-                }
-
-                // 写入CSV文件到ZIP
-                ZipEntry csvEntry = new ZipEntry("products.csv");
-                zipOut.putNextEntry(csvEntry);
-                zipOut.write(csvContent.toString().getBytes("UTF-8"));
-                zipOut.closeEntry();
-
-                // 写入图片文件到ZIP
                 int imageCount = 0;
-                for (Map.Entry<String, String> entry : imageMap.entrySet()) {
-                    String originalPath = entry.getKey();
-                    String newFileName = entry.getValue();
-                    File imageFile = new File(originalPath);
 
-                    if (imageFile.exists()) {
-                        ZipEntry imageEntry = new ZipEntry("images/" + newFileName);
-                        zipOut.putNextEntry(imageEntry);
+                // 写入数据行
+                for (int i = 0; i < products.size(); i++) {
+                    Product product = products.get(i);
+                    Row row = sheet.createRow(i + 1);
 
-                        BufferedInputStream bis = new BufferedInputStream(new FileInputStream(imageFile));
-                        byte[] buffer = new byte[8192];
-                        int count;
-                        while ((count = bis.read(buffer)) != -1) {
-                            zipOut.write(buffer, 0, count);
-                        }
-                        bis.close();
-                        zipOut.closeEntry();
-                        imageCount++;
+                    // 设置行高（如果有图片则设置更高的行）
+                    String photoPath = product.getPhotoPath();
+                    boolean hasImage = photoPath != null && !photoPath.isEmpty() && new File(photoPath).exists();
+                    if (hasImage) {
+                        row.setHeightInPoints(80); // 图片行高度
+                    } else {
+                        row.setHeightInPoints(30); // 普通行高度
                     }
+
+                    // ID
+                    Cell cell0 = row.createCell(0);
+                    cell0.setCellValue(product.getId());
+                    cell0.setCellStyle(cellStyle);
+
+                    // 产品名称
+                    Cell cell1 = row.createCell(1);
+                    cell1.setCellValue(product.getName() != null ? product.getName() : "");
+                    cell1.setCellStyle(cellStyle);
+
+                    // 规格
+                    Cell cell2 = row.createCell(2);
+                    cell2.setCellValue(product.getSpecification() != null ? product.getSpecification() : "");
+                    cell2.setCellStyle(cellStyle);
+
+                    // 尺寸
+                    Cell cell3 = row.createCell(3);
+                    cell3.setCellValue(product.getSize() != null ? product.getSize() : "");
+                    cell3.setCellStyle(cellStyle);
+
+                    // 材质
+                    Cell cell4 = row.createCell(4);
+                    cell4.setCellValue(product.getMaterial() != null ? product.getMaterial() : "");
+                    cell4.setCellStyle(cellStyle);
+
+                    // 备注
+                    Cell cell5 = row.createCell(5);
+                    cell5.setCellValue(product.getRemark() != null ? product.getRemark() : "");
+                    cell5.setCellStyle(cellStyle);
+
+                    // 价格
+                    Cell cell6 = row.createCell(6);
+                    cell6.setCellValue(String.format(Locale.US, "$%.2f", product.getPrice()));
+                    cell6.setCellStyle(cellStyle);
+
+                    // 图片
+                    Cell cell7 = row.createCell(7);
+                    cell7.setCellStyle(cellStyle);
+
+                    if (hasImage) {
+                        try {
+                            // 读取图片
+                            File imageFile = new File(photoPath);
+                            BufferedInputStream bis = new BufferedInputStream(new FileInputStream(imageFile));
+                            byte[] imageBytes = IOUtils.toByteArray(bis);
+                            bis.close();
+
+                            // 判断图片格式
+                            int pictureType;
+                            String lowerPath = photoPath.toLowerCase();
+                            if (lowerPath.endsWith(".png")) {
+                                pictureType = Workbook.PICTURE_TYPE_PNG;
+                            } else if (lowerPath.endsWith(".jpg") || lowerPath.endsWith(".jpeg")) {
+                                pictureType = Workbook.PICTURE_TYPE_JPEG;
+                            } else {
+                                pictureType = Workbook.PICTURE_TYPE_JPEG; // 默认JPEG
+                            }
+
+                            // 添加图片到工作簿
+                            int pictureIdx = workbook.addPicture(imageBytes, pictureType);
+
+                            // 创建锚点（定位图片位置）
+                            ClientAnchor anchor = helper.createClientAnchor();
+                            anchor.setCol1(7);  // 图片左上角列
+                            anchor.setRow1(i + 1);  // 图片左上角行
+                            anchor.setCol2(8);  // 图片右下角列
+                            anchor.setRow2(i + 2);  // 图片右下角行
+
+                            // 插入图片
+                            drawing.createPicture(anchor, pictureIdx);
+                            imageCount++;
+
+                        } catch (Exception e) {
+                            cell7.setCellValue("图片加载失败");
+                        }
+                    } else {
+                        cell7.setCellValue("无图片");
+                    }
+
+                    // 话术
+                    Cell cell8 = row.createCell(8);
+                    cell8.setCellValue(product.getScript() != null ? product.getScript() : "");
+                    cell8.setCellStyle(cellStyle);
+
+                    // 创建时间
+                    Cell cell9 = row.createCell(9);
+                    cell9.setCellValue(product.getCreateTime() > 0 ? dateFormat.format(new Date(product.getCreateTime())) : "");
+                    cell9.setCellStyle(cellStyle);
+
+                    // 更新时间
+                    Cell cell10 = row.createCell(10);
+                    cell10.setCellValue(product.getUpdateTime() > 0 ? dateFormat.format(new Date(product.getUpdateTime())) : "");
+                    cell10.setCellStyle(cellStyle);
+
+                    // 更新进度
+                    final int progress = i + 1;
+                    final int total = products.size();
+                    runOnUiThread(() -> {
+                        progressDialog.setMessage("正在导出... " + progress + "/" + total);
+                    });
                 }
 
-                zipOut.flush();
-                zipOut.close();
+                // 写入文件
+                workbook.write(outputStream);
+                workbook.close();
                 outputStream.close();
 
                 final int finalImageCount = imageCount;
+                final int productCount = products.size();
                 runOnUiThread(() -> {
                     progressDialog.dismiss();
-                    String message = "导出成功！\n共 " + products.size() + " 条数据，" + finalImageCount + " 张图片\n\nZIP文件包含：\n• products.csv（产品数据）\n• images/（产品图片）";
-                    Toast.makeText(this, message, Toast.LENGTH_LONG).show();
+                    Toast.makeText(this, 
+                        "导出成功！\n共 " + productCount + " 条数据，" + finalImageCount + " 张图片已嵌入Excel", 
+                        Toast.LENGTH_LONG).show();
                 });
 
             } catch (Exception e) {
@@ -280,20 +377,6 @@ public class SettingsActivity extends AppCompatActivity {
                 });
             }
         });
-    }
-
-    /**
-     * 转义CSV字段（处理逗号、引号、换行符）
-     */
-    private String escapeCSV(String value) {
-        if (value == null) {
-            return "";
-        }
-        // 如果包含逗号、引号或换行符，需要用引号包围并转义内部引号
-        if (value.contains(",") || value.contains("\"") || value.contains("\n") || value.contains("\r")) {
-            return "\"" + value.replace("\"", "\"\"") + "\"";
-        }
-        return value;
     }
 
     @Override

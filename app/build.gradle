@@ -17,8 +17,8 @@ android {
         applicationId "com.productmanager"
         minSdk 24
         targetSdk 34
-        versionCode 11
-        versionName "1.10"
+        versionCode 12
+        versionName "1.11"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -72,6 +72,10 @@ dependencies {
     // Image loading
     implementation 'com.github.bumptech.glide:glide:4.16.0'
     annotationProcessor 'com.github.bumptech.glide:compiler:4.16.0'
+    
+    // Apache POI for Excel (with embedded images)
+    implementation 'org.apache.poi:poi:5.2.5'
+    implementation 'org.apache.poi:poi-ooxml:5.2.5'
     
     testImplementation 'junit:junit:4.13.2'
     androidTestImplementation 'androidx.test.ext:junit:1.1.5'
