@@ -204,24 +204,27 @@ public class MainActivity extends AppCompatActivity implements SideIndexBar.OnLe
                 products = database.productDao().searchProducts(keyword);
             }
 
+            // 在后台线程获取字母列表，避免在主线程访问数据库
+            List<String> usedLetters = null;
+            if (keyword.isEmpty()) {
+                usedLetters = database.productDao().getUsedLetters();
+            } else {
+                Set<String> letters = new HashSet<>();
+                for (Product p : products) {
+                    String firstLetter = p.getFirstLetter();
+                    if (firstLetter != null && !firstLetter.isEmpty()) {
+                        letters.add(firstLetter.toUpperCase());
+                    }
+                }
+                usedLetters = new ArrayList<>(letters);
+            }
+
+            final List<String> finalUsedLetters = usedLetters;
             runOnUiThread(() -> {
                 currentProducts = products;
                 adapter.setProducts(products);
                 updateEmptyView(products);
-
-                if (keyword.isEmpty()) {
-                    List<String> usedLetters = database.productDao().getUsedLetters();
-                    updateSideIndexBar(usedLetters);
-                } else {
-                    Set<String> letters = new HashSet<>();
-                    for (Product p : products) {
-                        String firstLetter = p.getFirstLetter();
-                        if (firstLetter != null && !firstLetter.isEmpty()) {
-                            letters.add(firstLetter.toUpperCase());
-                        }
-                    }
-                    sideIndexBar.setLetters(new ArrayList<>(letters));
-                }
+                updateSideIndexBar(finalUsedLetters);
             });
         });
     }
