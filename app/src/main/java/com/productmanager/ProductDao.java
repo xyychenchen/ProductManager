@@ -30,7 +30,13 @@ public interface ProductDao {
     @Query("SELECT * FROM products WHERE id = :id")
     Product getProductById(int id);
     
-    @Query("SELECT * FROM products WHERE name LIKE '%' || :keyword || '%' OR specification LIKE '%' || :keyword || '%' ORDER BY name COLLATE NOCASE ASC")
+    @Query("SELECT * FROM products WHERE " +
+           "name LIKE '%' || :keyword || '%' OR " +
+           "specification LIKE '%' || :keyword || '%' OR " +
+           "size LIKE '%' || :keyword || '%' OR " +
+           "material LIKE '%' || :keyword || '%' OR " +
+           "remark LIKE '%' || :keyword || '%' " +
+           "ORDER BY name COLLATE NOCASE ASC")
     List<Product> searchProducts(String keyword);
     
     @Query("SELECT * FROM products WHERE name LIKE :letter || '%' ORDER BY name COLLATE NOCASE ASC")
