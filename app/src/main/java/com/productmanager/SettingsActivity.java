@@ -6,6 +6,7 @@ import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.net.Uri;
 import android.os.Bundle;
+import android.util.Base64;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -13,26 +14,12 @@ import androidx.appcompat.app.AppCompatActivity;
 
 import com.google.android.material.appbar.MaterialToolbar;
 
-import org.apache.poi.ss.usermodel.Cell;
-import org.apache.poi.ss.usermodel.CellStyle;
-import org.apache.poi.ss.usermodel.ClientAnchor;
-import org.apache.poi.ss.usermodel CreationHelper;
-import org.apache.poi.ss.usermodel.Drawing;
-import org.apache.poi.ss.usermodel.Font;
-import org.apache.poi.ss.usermodel.HorizontalAlignment;
-import org.apache.poi.ss.usermodel.Row;
-import org.apache.poi.ss.usermodel.Sheet;
-import org.apache.poi.ss.usermodel.VerticalAlignment;
-import org.apache.poi.ss.usermodel.Workbook;
-import org.apache.poi.ss.util.CellRangeAddress;
-import org.apache.poi.util.IOUtils;
-import org.apache.poi.xssf.usermodel.XSSFWorkbook;
-
 import java.io.BufferedInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.OutputStream;
+import java.io.PrintWriter;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.List;
@@ -112,7 +99,7 @@ public class SettingsActivity extends AppCompatActivity {
                         "• 产品照片拍摄与选择\n" +
                         "• 字母索引快速定位\n" +
                         "• 产品话术记录\n" +
-                        "• 数据导出Excel（含嵌入图片）\n\n" +
+                        "• 数据导出HTML表格（含嵌入图片）\n\n" +
                         "开发者：xyychenchen")
                 .setPositiveButton("确定", null)
                 .show();
@@ -128,7 +115,7 @@ public class SettingsActivity extends AppCompatActivity {
     }
 
     /**
-     * 导出数据到Excel（包含嵌入图片）
+     * 导出数据到HTML表格（包含嵌入图片）
      */
     private void exportData() {
         // 显示加载对话框
@@ -150,10 +137,10 @@ public class SettingsActivity extends AppCompatActivity {
                 }
 
                 // 使用 Storage Access Framework 让用户选择保存位置
-                String fileName = "products_" + new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(new Date()) + ".xlsx";
+                String fileName = "products_" + new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(new Date()) + ".html";
                 Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
                 intent.addCategory(Intent.CATEGORY_OPENABLE);
-                intent.setType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+                intent.setType("text/html");
                 intent.putExtra(Intent.EXTRA_TITLE, fileName);
                 startActivityForResult(intent, REQUEST_EXPORT);
             });
@@ -173,7 +160,7 @@ public class SettingsActivity extends AppCompatActivity {
     }
 
     /**
-     * 将数据导出到指定URI（Excel格式，包含嵌入图片）
+     * 将数据导出到指定URI（HTML表格格式，包含嵌入图片）
      */
     private void exportDataToUri(Uri uri) {
         progressDialog = new ProgressDialog(this);
@@ -190,162 +177,112 @@ public class SettingsActivity extends AppCompatActivity {
                     throw new Exception("无法打开文件");
                 }
 
-                // 创建Excel工作簿
-                Workbook workbook = new XSSFWorkbook();
-                Sheet sheet = workbook.createSheet("产品列表");
-
-                // 创建样式
-                CellStyle headerStyle = workbook.createCellStyle();
-                headerStyle.setAlignment(HorizontalAlignment.CENTER);
-                headerStyle.setVerticalAlignment(VerticalAlignment.CENTER);
-                Font headerFont = workbook.createFont();
-                headerFont.setBold(true);
-                headerFont.setFontHeightInPoints((short) 12);
-                headerStyle.setFont(headerFont);
-
-                CellStyle cellStyle = workbook.createCellStyle();
-                cellStyle.setVerticalAlignment(VerticalAlignment.CENTER);
-                cellStyle.setWrapText(true);
-
-                // 创建表头
-                Row headerRow = sheet.createRow(0);
-                String[] headers = {"ID", "产品名称", "规格", "尺寸", "材质", "备注", "价格(美元)", "产品图片", "话术", "创建时间", "更新时间"};
-                for (int i = 0; i < headers.length; i++) {
-                    Cell cell = headerRow.createCell(i);
-                    cell.setCellValue(headers[i]);
-                    cell.setCellStyle(headerStyle);
-                }
-
-                // 设置列宽
-                sheet.setColumnWidth(0, 2000);   // ID
-                sheet.setColumnWidth(1, 8000);   // 产品名称
-                sheet.setColumnWidth(2, 6000);   // 规格
-                sheet.setColumnWidth(3, 4000);   // 尺寸
-                sheet.setColumnWidth(4, 4000);   // 材质
-                sheet.setColumnWidth(5, 6000);   // 备注
-                sheet.setColumnWidth(6, 3000);   // 价格
-                sheet.setColumnWidth(7, 5000);   // 图片
-                sheet.setColumnWidth(8, 10000);  // 话术
-                sheet.setColumnWidth(9, 5000);   // 创建时间
-                sheet.setColumnWidth(10, 5000);  // 更新时间
-
-                // 设置表头行高
-                headerRow.setHeightInPoints(25);
-
-                // 创建绘图对象用于添加图片
-                Drawing<?> drawing = sheet.createDrawingPatriarch();
-                CreationHelper helper = workbook.getCreationHelper();
+                PrintWriter writer = new PrintWriter(outputStream, true);
 
                 SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault());
                 int imageCount = 0;
 
+                // 写入HTML头部
+                writer.println("<!DOCTYPE html>");
+                writer.println("<html lang='zh-CN'>");
+                writer.println("<head>");
+                writer.println("<meta charset='UTF-8'>");
+                writer.println("<meta name='viewport' content='width=device-width, initial-scale=1.0'>");
+                writer.println("<title>产品列表</title>");
+                writer.println("<style>");
+                writer.println("body { font-family: 'Microsoft YaHei', Arial, sans-serif; margin: 20px; background-color: #f5f5f5; }");
+                writer.println("h1 { text-align: center; color: #333; }");
+                writer.println("table { border-collapse: collapse; width: 100%; background-color: white; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }");
+                writer.println("th { background-color: #2196F3; color: white; padding: 12px 8px; text-align: center; font-weight: bold; }");
+                writer.println("td { border: 1px solid #ddd; padding: 10px 8px; text-align: center; vertical-align: middle; }");
+                writer.println("tr:nth-child(even) { background-color: #f9f9f9; }");
+                writer.println("tr:hover { background-color: #f1f1f1; }");
+                writer.println(".product-img { max-width: 100px; max-height: 100px; object-fit: contain; }");
+                writer.println(".no-img { color: #999; font-style: italic; }");
+                writer.println(".info { text-align: center; margin-top: 20px; color: #666; }");
+                writer.println("</style>");
+                writer.println("</head>");
+                writer.println("<body>");
+                writer.println("<h1>产品列表</h1>");
+                writer.println("<table>");
+                writer.println("<tr>");
+                writer.println("<th>ID</th>");
+                writer.println("<th>产品名称</th>");
+                writer.println("<th>规格</th>");
+                writer.println("<th>尺寸</th>");
+                writer.println("<th>材质</th>");
+                writer.println("<th>备注</th>");
+                writer.println("<th>价格(美元)</th>");
+                writer.println("<th>产品图片</th>");
+                writer.println("<th>话术</th>");
+                writer.println("<th>创建时间</th>");
+                writer.println("<th>更新时间</th>");
+                writer.println("</tr>");
+
                 // 写入数据行
                 for (int i = 0; i < products.size(); i++) {
                     Product product = products.get(i);
-                    Row row = sheet.createRow(i + 1);
-
-                    // 设置行高（如果有图片则设置更高的行）
-                    String photoPath = product.getPhotoPath();
-                    boolean hasImage = photoPath != null && !photoPath.isEmpty() && new File(photoPath).exists();
-                    if (hasImage) {
-                        row.setHeightInPoints(80); // 图片行高度
-                    } else {
-                        row.setHeightInPoints(30); // 普通行高度
-                    }
+                    StringBuilder row = new StringBuilder();
+                    row.append("<tr>");
 
                     // ID
-                    Cell cell0 = row.createCell(0);
-                    cell0.setCellValue(product.getId());
-                    cell0.setCellStyle(cellStyle);
+                    row.append("<td>").append(product.getId()).append("</td>");
 
                     // 产品名称
-                    Cell cell1 = row.createCell(1);
-                    cell1.setCellValue(product.getName() != null ? product.getName() : "");
-                    cell1.setCellStyle(cellStyle);
+                    row.append("<td>").append(escapeHtml(product.getName())).append("</td>");
 
                     // 规格
-                    Cell cell2 = row.createCell(2);
-                    cell2.setCellValue(product.getSpecification() != null ? product.getSpecification() : "");
-                    cell2.setCellStyle(cellStyle);
+                    row.append("<td>").append(escapeHtml(product.getSpecification())).append("</td>");
 
                     // 尺寸
-                    Cell cell3 = row.createCell(3);
-                    cell3.setCellValue(product.getSize() != null ? product.getSize() : "");
-                    cell3.setCellStyle(cellStyle);
+                    row.append("<td>").append(escapeHtml(product.getSize())).append("</td>");
 
                     // 材质
-                    Cell cell4 = row.createCell(4);
-                    cell4.setCellValue(product.getMaterial() != null ? product.getMaterial() : "");
-                    cell4.setCellStyle(cellStyle);
+                    row.append("<td>").append(escapeHtml(product.getMaterial())).append("</td>");
 
                     // 备注
-                    Cell cell5 = row.createCell(5);
-                    cell5.setCellValue(product.getRemark() != null ? product.getRemark() : "");
-                    cell5.setCellStyle(cellStyle);
+                    row.append("<td>").append(escapeHtml(product.getRemark())).append("</td>");
 
                     // 价格
-                    Cell cell6 = row.createCell(6);
-                    cell6.setCellValue(String.format(Locale.US, "$%.2f", product.getPrice()));
-                    cell6.setCellStyle(cellStyle);
+                    row.append("<td>").append(String.format(Locale.US, "$%.2f", product.getPrice())).append("</td>");
 
                     // 图片
-                    Cell cell7 = row.createCell(7);
-                    cell7.setCellStyle(cellStyle);
-
-                    if (hasImage) {
-                        try {
-                            // 读取图片
-                            File imageFile = new File(photoPath);
-                            BufferedInputStream bis = new BufferedInputStream(new FileInputStream(imageFile));
-                            byte[] imageBytes = IOUtils.toByteArray(bis);
-                            bis.close();
-
-                            // 判断图片格式
-                            int pictureType;
-                            String lowerPath = photoPath.toLowerCase();
-                            if (lowerPath.endsWith(".png")) {
-                                pictureType = Workbook.PICTURE_TYPE_PNG;
-                            } else if (lowerPath.endsWith(".jpg") || lowerPath.endsWith(".jpeg")) {
-                                pictureType = Workbook.PICTURE_TYPE_JPEG;
-                            } else {
-                                pictureType = Workbook.PICTURE_TYPE_JPEG; // 默认JPEG
+                    String photoPath = product.getPhotoPath();
+                    row.append("<td>");
+                    if (photoPath != null && !photoPath.isEmpty()) {
+                        File imageFile = new File(photoPath);
+                        if (imageFile.exists()) {
+                            try {
+                                String base64Image = imageToBase64(photoPath);
+                                if (base64Image != null) {
+                                    row.append("<img src='data:image/jpeg;base64,").append(base64Image).append("' class='product-img' alt='产品图片'>");
+                                    imageCount++;
+                                } else {
+                                    row.append("<span class='no-img'>无图片</span>");
+                                }
+                            } catch (Exception e) {
+                                row.append("<span class='no-img'>图片加载失败</span>");
                             }
-
-                            // 添加图片到工作簿
-                            int pictureIdx = workbook.addPicture(imageBytes, pictureType);
-
-                            // 创建锚点（定位图片位置）
-                            ClientAnchor anchor = helper.createClientAnchor();
-                            anchor.setCol1(7);  // 图片左上角列
-                            anchor.setRow1(i + 1);  // 图片左上角行
-                            anchor.setCol2(8);  // 图片右下角列
-                            anchor.setRow2(i + 2);  // 图片右下角行
-
-                            // 插入图片
-                            drawing.createPicture(anchor, pictureIdx);
-                            imageCount++;
-
-                        } catch (Exception e) {
-                            cell7.setCellValue("图片加载失败");
+                        } else {
+                            row.append("<span class='no-img'>无图片</span>");
                         }
                     } else {
-                        cell7.setCellValue("无图片");
+                        row.append("<span class='no-img'>无图片</span>");
                     }
+                    row.append("</td>");
 
                     // 话术
-                    Cell cell8 = row.createCell(8);
-                    cell8.setCellValue(product.getScript() != null ? product.getScript() : "");
-                    cell8.setCellStyle(cellStyle);
+                    row.append("<td>").append(escapeHtml(product.getScript())).append("</td>");
 
                     // 创建时间
-                    Cell cell9 = row.createCell(9);
-                    cell9.setCellValue(product.getCreateTime() > 0 ? dateFormat.format(new Date(product.getCreateTime())) : "");
-                    cell9.setCellStyle(cellStyle);
+                    row.append("<td>").append(product.getCreateTime() > 0 ? dateFormat.format(new Date(product.getCreateTime())) : "").append("</td>");
 
                     // 更新时间
-                    Cell cell10 = row.createCell(10);
-                    cell10.setCellValue(product.getUpdateTime() > 0 ? dateFormat.format(new Date(product.getUpdateTime())) : "");
-                    cell10.setCellStyle(cellStyle);
+                    row.append("<td>").append(product.getUpdateTime() > 0 ? dateFormat.format(new Date(product.getUpdateTime())) : "").append("</td>");
+
+                    row.append("</tr>");
+
+                    writer.println(row.toString());
 
                     // 更新进度
                     final int progress = i + 1;
@@ -355,17 +292,22 @@ public class SettingsActivity extends AppCompatActivity {
                     });
                 }
 
-                // 写入文件
-                workbook.write(outputStream);
-                workbook.close();
+                // 写入HTML尾部
+                writer.println("</table>");
+                writer.println("<p class='info'>导出时间: " + dateFormat.format(new Date()) + " | 共 " + products.size() + " 条数据，" + imageCount + " 张图片</p>");
+                writer.println("</body>");
+                writer.println("</html>");
+
+                writer.flush();
+                writer.close();
                 outputStream.close();
 
                 final int finalImageCount = imageCount;
                 final int productCount = products.size();
                 runOnUiThread(() -> {
                     progressDialog.dismiss();
-                    Toast.makeText(this, 
-                        "导出成功！\n共 " + productCount + " 条数据，" + finalImageCount + " 张图片已嵌入Excel", 
+                    Toast.makeText(this,
+                        "导出成功！\n共 " + productCount + " 条数据，" + finalImageCount + " 张图片已嵌入\n\n可以用浏览器或Excel打开HTML文件查看",
                         Toast.LENGTH_LONG).show();
                 });
 
@@ -377,6 +319,67 @@ public class SettingsActivity extends AppCompatActivity {
                 });
             }
         });
+    }
+
+    /**
+     * 将图片转换为Base64字符串
+     */
+    private String imageToBase64(String imagePath) {
+        try {
+            File imageFile = new File(imagePath);
+            if (!imageFile.exists()) {
+                return null;
+            }
+
+            // 读取图片并压缩
+            BitmapFactory.Options options = new BitmapFactory.Options();
+            options.inJustDecodeBounds = true;
+            BitmapFactory.decodeFile(imagePath, options);
+
+            // 计算缩放比例
+            int maxSize = 200; // 最大宽高
+            int scale = 1;
+            if (options.outWidth > maxSize || options.outHeight > maxSize) {
+                int widthScale = Math.round((float) options.outWidth / maxSize);
+                int heightScale = Math.round((float) options.outHeight / maxSize);
+                scale = Math.max(widthScale, heightScale);
+            }
+
+            BitmapFactory.Options decodeOptions = new BitmapFactory.Options();
+            decodeOptions.inSampleSize = scale;
+            Bitmap bitmap = BitmapFactory.decodeFile(imagePath, decodeOptions);
+
+            if (bitmap == null) {
+                return null;
+            }
+
+            // 转换为Base64
+            ByteArrayOutputStream baos = new ByteArrayOutputStream();
+            bitmap.compress(Bitmap.CompressFormat.JPEG, 80, baos);
+            byte[] imageBytes = baos.toByteArray();
+            bitmap.recycle();
+
+            return Base64.encodeToString(imageBytes, Base64.NO_WRAP);
+        } catch (Exception e) {
+            e.printStackTrace();
+            return null;
+        }
+    }
+
+    /**
+     * 转义HTML特殊字符
+     */
+    private String escapeHtml(String value) {
+        if (value == null || value.isEmpty()) {
+            return "";
+        }
+        return value
+                .replace("&", "&amp;")
+                .replace("<", "&lt;")
+                .replace(">", "&gt;")
+                .replace("\"", "&quot;")
+                .replace("'", "&#39;")
+                .replace("\n", "<br>");
     }
 
     @Override
