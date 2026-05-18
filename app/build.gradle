@@ -21,6 +21,9 @@ android {
         versionName "1.11"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        
+        // 支持Apache POI需要的Java 8+ API
+        multiDexEnabled true
     }
 
     signingConfigs {
@@ -73,9 +76,20 @@ dependencies {
     implementation 'com.github.bumptech.glide:glide:4.16.0'
     annotationProcessor 'com.github.bumptech.glide:compiler:4.16.0'
     
-    // Apache POI for Excel (with embedded images)
-    implementation 'org.apache.poi:poi:5.2.5'
-    implementation 'org.apache.poi:poi-ooxml:5.2.5'
+    // Apache POI for Excel (with embedded images) - Android兼容版本
+    implementation('org.apache.poi:poi:5.2.5') {
+        exclude group: 'org.apache.commons', module: 'commons-collections4'
+    }
+    implementation('org.apache.poi:poi-ooxml:5.2.5') {
+        exclude group: 'org.apache.commons', module: 'commons-collections4'
+        exclude group: 'org.apache.xmlbeans', module: 'xmlbeans'
+    }
+    // POI需要的XML处理
+    implementation 'com.fasterxml:aalto-xml:1.2.2'
+    implementation 'commons-codec:commons-codec:1.15'
+    implementation 'org.apache.commons:commons-collections4:4.4'
+    // MultiDex支持
+    implementation 'androidx.multidex:multidex:2.0.1'
     
     testImplementation 'junit:junit:4.13.2'
     androidTestImplementation 'androidx.test.ext:junit:1.1.5'
