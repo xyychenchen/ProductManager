@@ -8,26 +8,47 @@
     android:background="#FAFAFA"
     tools:context=".MainActivity">
 
-    <!-- 搜索栏 -->
-    <EditText
-        android:id="@+id/et_search"
+    <!-- 搜索栏容器 -->
+    <FrameLayout
+        android:id="@+id/search_container"
         android:layout_width="0dp"
         android:layout_height="48dp"
         android:layout_margin="12dp"
-        android:background="@drawable/bg_search"
-        android:drawableStart="@drawable/ic_search"
-        android:drawablePadding="8dp"
-        android:hint="搜索产品..."
-        android:inputType="text"
-        android:maxLines="1"
-        android:paddingStart="16dp"
-        android:paddingEnd="16dp"
-        android:textColor="#333333"
-        android:textColorHint="#999999"
-        android:textSize="16sp"
         app:layout_constraintEnd_toStartOf="@id/right_panel"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent" />
+        app:layout_constraintTop_toTopOf="parent">
+
+        <!-- 搜索输入框 -->
+        <EditText
+            android:id="@+id/et_search"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:background="@drawable/bg_search"
+            android:drawableStart="@drawable/ic_search"
+            android:drawablePadding="8dp"
+            android:hint="搜索产品..."
+            android:inputType="text"
+            android:maxLines="1"
+            android:paddingStart="16dp"
+            android:paddingEnd="48dp"
+            android:textColor="#333333"
+            android:textColorHint="#999999"
+            android:textSize="16sp" />
+
+        <!-- 清除按钮 -->
+        <ImageView
+            android:id="@+id/iv_clear"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:layout_gravity="end|center_vertical"
+            android:layout_marginEnd="6dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:src="@drawable/ic_clear"
+            android:contentDescription="清除"
+            android:visibility="gone"
+            app:tint="#999999" />
+
+    </FrameLayout>
 
     <!-- 右侧面板：设置按钮 + 字母索引栏 -->
     <LinearLayout
@@ -70,11 +91,25 @@
         android:layout_marginTop="8dp"
         android:clipToPadding="false"
         android:paddingBottom="80dp"
-        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintBottom_toTopOf="@id/tv_product_count"
         app:layout_constraintEnd_toStartOf="@id/right_panel"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/et_search"
+        app:layout_constraintTop_toBottomOf="@id/search_container"
         tools:listitem="@layout/item_product" />
+
+    <!-- 产品总数显示 -->
+    <TextView
+        android:id="@+id/tv_product_count"
+        android:layout_width="0dp"
+        android:layout_height="40dp"
+        android:gravity="center"
+        android:textColor="#999999"
+        android:textSize="14sp"
+        android:background="#FAFAFA"
+        android:visibility="gone"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toStartOf="@id/right_panel"
+        app:layout_constraintStart_toStartOf="parent" />
 
     <!-- 空视图 -->
     <TextView
@@ -90,7 +125,7 @@
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toStartOf="@id/right_panel"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/et_search" />
+        app:layout_constraintTop_toBottomOf="@id/search_container" />
 
     <!-- 字母覆盖层 -->
     <TextView

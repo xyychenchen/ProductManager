@@ -37,15 +37,18 @@ public class MainActivity extends AppCompatActivity implements SideIndexBar.OnLe
     private ProductAdapter adapter;
     private SideIndexBar sideIndexBar;
     private ImageView ivSettings;
+    private ImageView ivClear;
     private EditText etSearch;
     private TextView tvEmptyView;
     private TextView tvOverlay;
+    private TextView tvProductCount;
     private FloatingActionButton fabAdd;
 
     private ProductDatabase database;
     private ExecutorService executorService;
 
     private List<Product> currentProducts = new ArrayList<>();
+    private int totalProductCount = 0;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -65,6 +68,9 @@ public class MainActivity extends AppCompatActivity implements SideIndexBar.OnLe
         // 设置搜索功能
         setupSearch();
 
+        // 设置清除按钮
+        setupClearButton();
+
         // 设置字母索引栏
         setupSideIndexBar();
 
@@ -79,11 +85,13 @@ public class MainActivity extends AppCompatActivity implements SideIndexBar.OnLe
         recyclerView = findViewById(R.id.recycler_view);
         sideIndexBar = findViewById(R.id.side_index_bar);
         etSearch = findViewById(R.id.et_search);
+        ivClear = findViewById(R.id.iv_clear);
         tvEmptyView = findViewById(R.id.tv_empty_view);
         tvOverlay = findViewById(R.id.tv_overlay);
+        tvProductCount = findViewById(R.id.tv_product_count);
         fabAdd = findViewById(R.id.fab_add);
         ivSettings = findViewById(R.id.iv_settings);
-        
+
         // 设置按钮点击事件
         ivSettings.setOnClickListener(v -> {
             Intent intent = new Intent(MainActivity.this, SettingsActivity.class);
@@ -129,7 +137,22 @@ public class MainActivity extends AppCompatActivity implements SideIndexBar.OnLe
 
             @Override
             public void afterTextChanged(Editable s) {
-                searchProducts(s.toString().trim());
+                String keyword = s.toString().trim();
+                // 显示/隐藏清除按钮
+                ivClear.setVisibility(keyword.isEmpty() ? View.GONE : View.VISIBLE);
+                searchProducts(keyword);
+            }
+        });
+    }
+
+    private void setupClearButton() {
+        ivClear.setOnClickListener(v -> {
+            etSearch.setText("");
+            etSearch.clearFocus();
+            // 隐藏软键盘
+            android.view.inputmethod.InputMethodManager imm = (android.view.inputmethod.InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
+            if (imm != null) {
+                imm.hideSoftInputFromWindow(etSearch.getWindowToken(), 0);
             }
         });
     }
@@ -166,12 +189,15 @@ public class MainActivity extends AppCompatActivity implements SideIndexBar.OnLe
         executorService.execute(() -> {
             List<Product> products = database.productDao().getAllProducts();
             List<String> usedLetters = database.productDao().getUsedLetters();
+            int count = products.size();
 
             runOnUiThread(() -> {
                 currentProducts = products;
+                totalProductCount = count;
                 adapter.setProducts(products);
                 updateEmptyView(products);
                 updateSideIndexBar(usedLetters);
+                updateProductCountDisplay();
             });
         });
     }
@@ -220,11 +246,13 @@ public class MainActivity extends AppCompatActivity implements SideIndexBar.OnLe
             }
 
             final List<String> finalUsedLetters = usedLetters;
+            final int resultCount = products.size();
             runOnUiThread(() -> {
                 currentProducts = products;
                 adapter.setProducts(products);
                 updateEmptyView(products);
                 updateSideIndexBar(finalUsedLetters);
+                updateProductCountDisplay(keyword, resultCount);
             });
         });
     }
@@ -236,6 +264,30 @@ public class MainActivity extends AppCompatActivity implements SideIndexBar.OnLe
         } else {
             tvEmptyView.setVisibility(View.GONE);
             recyclerView.setVisibility(View.VISIBLE);
+        }
+    }
+
+    /**
+     * 更新产品总数显示
+     */
+    private void updateProductCountDisplay() {
+        updateProductCountDisplay("", totalProductCount);
+    }
+
+    /**
+     * 更新产品总数显示（搜索时）
+     */
+    private void updateProductCountDisplay(String keyword, int resultCount) {
+        if (totalProductCount == 0) {
+            tvProductCount.setVisibility(View.GONE);
+            return;
+        }
+
+        tvProductCount.setVisibility(View.VISIBLE);
+        if (keyword.isEmpty()) {
+            tvProductCount.setText("共 " + totalProductCount + " 个产品");
+        } else {
+            tvProductCount.setText("搜索结果: " + resultCount + " / " + totalProductCount + " 个产品");
         }
     }
 
