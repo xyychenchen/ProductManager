@@ -13,8 +13,6 @@ import android.os.VibrationEffect;
 import android.os.Vibrator;
 import android.provider.MediaStore;
 import android.text.TextUtils;
-import android.util.Log;
-import android.view.MotionEvent;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.ImageView;
@@ -45,12 +43,10 @@ import java.util.concurrent.Executors;
  */
 public class AddProductActivity extends AppCompatActivity {
 
-    private static final String TAG = "AddProductActivity";
     private static final int REQUEST_STORAGE_PERMISSION = 100;
     private static final int REQUEST_CAMERA_PERMISSION = 101;
     private static final int REQUEST_PICK_IMAGE = 102;
     private static final int REQUEST_TAKE_PHOTO = 103;
-    private static final int REQUEST_FULLSCREEN_EDIT = 104;
 
     private MaterialToolbar toolbar;
     private ImageView ivPhoto;
@@ -93,11 +89,8 @@ public class AddProductActivity extends AppCompatActivity {
         // 设置照片点击
         setupPhotoPicker();
 
-        // 设置全屏编辑按钮
-        setupFullscreenEditButton();
-
-        // 设置话术编辑框滚动
-        setupScriptScroll();
+        // 设置Markdown预览按钮
+        setupMarkdownPreviewButton();
 
         // 设置保存按钮
         setupSaveButton();
@@ -135,7 +128,7 @@ public class AddProductActivity extends AppCompatActivity {
         ivPhoto.setOnClickListener(v -> showPhotoChooseDialog());
     }
 
-    private void setupFullscreenEditButton() {
+    private void setupMarkdownPreviewButton() {
         tvFullscreenEdit.setOnClickListener(v -> {
             String script = etScript.getText().toString();
             String productName = etName.getText().toString();
@@ -143,24 +136,7 @@ public class AddProductActivity extends AppCompatActivity {
             Intent intent = new Intent(this, ScriptViewerActivity.class);
             intent.putExtra(ScriptViewerActivity.EXTRA_PRODUCT_NAME, productName);
             intent.putExtra(ScriptViewerActivity.EXTRA_SCRIPT, script);
-            startActivityForResult(intent, REQUEST_FULLSCREEN_EDIT);
-        });
-    }
-
-    /**
-     * 设置话术编辑框支持滚动
-     */
-    private void setupScriptScroll() {
-        etScript.setOnTouchListener((v, event) -> {
-            if (v.getId() == R.id.et_script) {
-                v.getParent().requestDisallowInterceptTouchEvent(true);
-                switch (event.getAction() & MotionEvent.ACTION_MASK) {
-                    case MotionEvent.ACTION_UP:
-                        v.getParent().requestDisallowInterceptTouchEvent(false);
-                        break;
-                }
-            }
-            return false;
+            startActivity(intent);
         });
     }
 
@@ -345,16 +321,6 @@ public class AddProductActivity extends AppCompatActivity {
                 // 拍照 - 直接使用保存的文件路径
                 if (cameraPhotoPath != null) {
                     handleTakenPhoto();
-                }
-                break;
-
-            case REQUEST_FULLSCREEN_EDIT:
-                // 全屏编辑返回
-                if (data != null) {
-                    String script = data.getStringExtra(ScriptViewerActivity.EXTRA_SCRIPT_RESULT);
-                    if (script != null) {
-                        etScript.setText(script);
-                    }
                 }
                 break;
         }

@@ -197,7 +197,7 @@
                 android:layout_marginBottom="16dp"
                 android:background="#EEEEEE" />
 
-            <!-- 产品话术标题和全屏按钮 -->
+            <!-- 产品话术标题和预览按钮 -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -221,29 +221,38 @@
                     android:paddingTop="4dp"
                     android:paddingEnd="10dp"
                     android:paddingBottom="4dp"
-                    android:text="全屏编辑/查看"
+                    android:text="查看Markdown预览"
                     android:textColor="#2196F3"
                     android:textSize="12sp" />
 
             </LinearLayout>
 
-            <!-- 产品话术编辑框 - 支持滚动 -->
-            <EditText
-                android:id="@+id/et_script"
+            <!-- 产品话术编辑框 - 使用NestedScrollView实现平滑滚动 -->
+            <androidx.core.widget.NestedScrollView
                 android:layout_width="match_parent"
-                android:layout_height="150dp"
+                android:layout_height="200dp"
                 android:layout_marginTop="8dp"
                 android:background="@drawable/bg_edittext"
-                android:gravity="top|start"
-                android:hint="输入产品话术，直播时参考使用（支持Markdown格式）"
-                android:inputType="textMultiLine"
-                android:padding="12dp"
-                android:textColor="#333333"
-                android:textColorHint="#CCCCCC"
-                android:textSize="15sp"
-                android:fontFamily="monospace"
-                android:scrollbars="vertical"
-                android:overScrollMode="always" />
+                android:fillViewport="true"
+                android:overScrollMode="always"
+                android:scrollbars="vertical">
+
+                <EditText
+                    android:id="@+id/et_script"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:background="@android:color/transparent"
+                    android:gravity="top|start"
+                    android:hint="输入产品话术，直播时参考使用（支持Markdown格式）"
+                    android:inputType="textMultiLine"
+                    android:padding="12dp"
+                    android:textColor="#333333"
+                    android:textColorHint="#CCCCCC"
+                    android:textSize="15sp"
+                    android:fontFamily="monospace"
+                    android:lineSpacingExtra="4dp" />
+
+            </androidx.core.widget.NestedScrollView>
 
             <!-- 备注 -->
             <TextView
