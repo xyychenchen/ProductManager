@@ -13,9 +13,12 @@ import android.os.VibrationEffect;
 import android.os.Vibrator;
 import android.provider.MediaStore;
 import android.text.TextUtils;
+import android.util.Log;
+import android.view.MotionEvent;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.ImageView;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
@@ -42,10 +45,12 @@ import java.util.concurrent.Executors;
  */
 public class AddProductActivity extends AppCompatActivity {
 
+    private static final String TAG = "AddProductActivity";
     private static final int REQUEST_STORAGE_PERMISSION = 100;
     private static final int REQUEST_CAMERA_PERMISSION = 101;
     private static final int REQUEST_PICK_IMAGE = 102;
     private static final int REQUEST_TAKE_PHOTO = 103;
+    private static final int REQUEST_FULLSCREEN_EDIT = 104;
 
     private MaterialToolbar toolbar;
     private ImageView ivPhoto;
@@ -57,7 +62,7 @@ public class AddProductActivity extends AppCompatActivity {
     private EditText etRemark;
     private EditText etScript;
     private Button btnSave;
-    private Button btnViewScript;
+    private TextView tvFullscreenEdit;
 
     private ProductDatabase database;
     private ExecutorService executorService;
@@ -88,8 +93,11 @@ public class AddProductActivity extends AppCompatActivity {
         // 设置照片点击
         setupPhotoPicker();
 
-        // 设置查看话术按钮
-        setupViewScriptButton();
+        // 设置全屏编辑按钮
+        setupFullscreenEditButton();
+
+        // 设置话术编辑框滚动
+        setupScriptScroll();
 
         // 设置保存按钮
         setupSaveButton();
@@ -111,7 +119,7 @@ public class AddProductActivity extends AppCompatActivity {
         etRemark = findViewById(R.id.et_remark);
         etScript = findViewById(R.id.et_script);
         btnSave = findViewById(R.id.btn_save);
-        btnViewScript = findViewById(R.id.btn_view_script);
+        tvFullscreenEdit = findViewById(R.id.tv_fullscreen_edit);
     }
 
     private void setupToolbar() {
@@ -127,21 +135,32 @@ public class AddProductActivity extends AppCompatActivity {
         ivPhoto.setOnClickListener(v -> showPhotoChooseDialog());
     }
 
-    private void setupViewScriptButton() {
-        btnViewScript.setOnClickListener(v -> {
-            String script = etScript.getText().toString().trim();
-            String productName = etName.getText().toString().trim();
+    private void setupFullscreenEditButton() {
+        tvFullscreenEdit.setOnClickListener(v -> {
+            String script = etScript.getText().toString();
+            String productName = etName.getText().toString();
 
-            if (script.isEmpty()) {
-                Toast.makeText(this, "暂无话术内容", Toast.LENGTH_SHORT).show();
-                return;
-            }
-
-            // 打开话术全屏查看页面
             Intent intent = new Intent(this, ScriptViewerActivity.class);
             intent.putExtra(ScriptViewerActivity.EXTRA_PRODUCT_NAME, productName);
             intent.putExtra(ScriptViewerActivity.EXTRA_SCRIPT, script);
-            startActivity(intent);
+            startActivityForResult(intent, REQUEST_FULLSCREEN_EDIT);
+        });
+    }
+
+    /**
+     * 设置话术编辑框支持滚动
+     */
+    private void setupScriptScroll() {
+        etScript.setOnTouchListener((v, event) -> {
+            if (v.getId() == R.id.et_script) {
+                v.getParent().requestDisallowInterceptTouchEvent(true);
+                switch (event.getAction() & MotionEvent.ACTION_MASK) {
+                    case MotionEvent.ACTION_UP:
+                        v.getParent().requestDisallowInterceptTouchEvent(false);
+                        break;
+                }
+            }
+            return false;
         });
     }
 
@@ -326,6 +345,16 @@ public class AddProductActivity extends AppCompatActivity {
                 // 拍照 - 直接使用保存的文件路径
                 if (cameraPhotoPath != null) {
                     handleTakenPhoto();
+                }
+                break;
+
+            case REQUEST_FULLSCREEN_EDIT:
+                // 全屏编辑返回
+                if (data != null) {
+                    String script = data.getStringExtra(ScriptViewerActivity.EXTRA_SCRIPT_RESULT);
+                    if (script != null) {
+                        etScript.setText(script);
+                    }
                 }
                 break;
         }

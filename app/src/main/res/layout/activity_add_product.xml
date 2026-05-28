@@ -32,95 +32,40 @@
             android:orientation="vertical"
             android:padding="16dp">
 
-            <!-- 产品照片和查看话术按钮 -->
-            <LinearLayout
-                android:layout_width="match_parent"
+            <!-- 产品照片 -->
+            <TextView
+                android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:gravity="center_vertical"
-                android:orientation="horizontal">
+                android:text="产品照片"
+                android:textColor="#666666"
+                android:textSize="14sp" />
 
-                <!-- 左侧：产品照片 -->
-                <LinearLayout
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:orientation="vertical"
-                    android:gravity="center_horizontal">
+            <androidx.cardview.widget.CardView
+                android:layout_width="120dp"
+                android:layout_height="120dp"
+                android:layout_gravity="center_horizontal"
+                android:layout_marginTop="12dp"
+                app:cardCornerRadius="8dp"
+                app:cardElevation="2dp">
 
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="产品照片"
-                        android:textColor="#666666"
-                        android:textSize="14sp" />
+                <ImageView
+                    android:id="@+id/iv_photo"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:background="#F5F5F5"
+                    android:scaleType="centerCrop"
+                    android:src="@drawable/ic_product" />
 
-                    <androidx.cardview.widget.CardView
-                        android:layout_width="120dp"
-                        android:layout_height="120dp"
-                        android:layout_marginTop="12dp"
-                        app:cardCornerRadius="8dp"
-                        app:cardElevation="2dp">
+            </androidx.cardview.widget.CardView>
 
-                        <ImageView
-                            android:id="@+id/iv_photo"
-                            android:layout_width="match_parent"
-                            android:layout_height="match_parent"
-                            android:background="#F5F5F5"
-                            android:scaleType="centerCrop"
-                            android:src="@drawable/ic_product" />
-
-                    </androidx.cardview.widget.CardView>
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="4dp"
-                        android:text="点击选择照片"
-                        android:textColor="#999999"
-                        android:textSize="12sp" />
-
-                </LinearLayout>
-
-                <!-- 右侧：查看话术按钮 -->
-                <LinearLayout
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:orientation="vertical"
-                    android:gravity="center_horizontal">
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="产品话术"
-                        android:textColor="#666666"
-                        android:textSize="14sp" />
-
-                    <Button
-                        android:id="@+id/btn_view_script"
-                        android:layout_width="wrap_content"
-                        android:layout_height="48dp"
-                        android:layout_marginTop="24dp"
-                        android:background="@drawable/bg_button_outline"
-                        android:text="查看话术"
-                        android:textColor="#2196F3"
-                        android:textSize="15sp"
-                        android:drawableStart="@drawable/ic_script"
-                        android:drawablePadding="8dp"
-                        android:paddingStart="16dp"
-                        android:paddingEnd="16dp" />
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="4dp"
-                        android:text="点击全屏查看"
-                        android:textColor="#999999"
-                        android:textSize="12sp" />
-
-                </LinearLayout>
-
-            </LinearLayout>
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center_horizontal"
+                android:layout_marginTop="4dp"
+                android:text="点击选择照片"
+                android:textColor="#999999"
+                android:textSize="12sp" />
 
             <!-- 产品名称 -->
             <TextView
@@ -252,41 +197,41 @@
                 android:layout_marginBottom="16dp"
                 android:background="#EEEEEE" />
 
-            <!-- 备注 -->
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="备注"
-                android:textColor="#666666"
-                android:textSize="14sp" />
-
-            <EditText
-                android:id="@+id/et_remark"
+            <!-- 产品话术标题和全屏按钮 -->
+            <LinearLayout
                 android:layout_width="match_parent"
-                android:layout_height="80dp"
-                android:layout_marginTop="8dp"
-                android:layout_marginBottom="16dp"
-                android:background="@drawable/bg_edittext"
-                android:gravity="top|start"
-                android:hint="输入备注信息（可选）"
-                android:inputType="textMultiLine"
-                android:padding="12dp"
-                android:textColor="#333333"
-                android:textColorHint="#CCCCCC"
-                android:textSize="15sp" />
-
-            <!-- 产品话术编辑 -->
-            <TextView
-                android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="产品话术（支持Markdown格式）"
-                android:textColor="#666666"
-                android:textSize="14sp" />
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
 
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="产品话术（支持Markdown）"
+                    android:textColor="#666666"
+                    android:textSize="14sp" />
+
+                <TextView
+                    android:id="@+id/tv_fullscreen_edit"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:background="@drawable/bg_button_outline_small"
+                    android:paddingStart="10dp"
+                    android:paddingTop="4dp"
+                    android:paddingEnd="10dp"
+                    android:paddingBottom="4dp"
+                    android:text="全屏编辑/查看"
+                    android:textColor="#2196F3"
+                    android:textSize="12sp" />
+
+            </LinearLayout>
+
+            <!-- 产品话术编辑框 - 支持滚动 -->
             <EditText
                 android:id="@+id/et_script"
                 android:layout_width="match_parent"
-                android:layout_height="120dp"
+                android:layout_height="150dp"
                 android:layout_marginTop="8dp"
                 android:background="@drawable/bg_edittext"
                 android:gravity="top|start"
@@ -296,7 +241,32 @@
                 android:textColor="#333333"
                 android:textColorHint="#CCCCCC"
                 android:textSize="15sp"
-                android:fontFamily="monospace" />
+                android:fontFamily="monospace"
+                android:scrollbars="vertical"
+                android:overScrollMode="always" />
+
+            <!-- 备注 -->
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:text="备注"
+                android:textColor="#666666"
+                android:textSize="14sp" />
+
+            <EditText
+                android:id="@+id/et_remark"
+                android:layout_width="match_parent"
+                android:layout_height="80dp"
+                android:layout_marginTop="8dp"
+                android:background="@drawable/bg_edittext"
+                android:gravity="top|start"
+                android:hint="输入备注信息（可选）"
+                android:inputType="textMultiLine"
+                android:padding="12dp"
+                android:textColor="#333333"
+                android:textColorHint="#CCCCCC"
+                android:textSize="15sp" />
 
             <!-- 保存按钮 -->
             <Button

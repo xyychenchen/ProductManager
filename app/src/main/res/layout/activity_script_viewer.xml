@@ -17,7 +17,26 @@
         app:navigationIcon="@drawable/ic_back"
         app:title="产品话术"
         app:titleCentered="true"
-        app:titleTextColor="#333333" />
+        app:titleTextColor="#333333">
+
+        <!-- 保存按钮 -->
+        <TextView
+            android:id="@+id/tv_save"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="end"
+            android:layout_marginEnd="16dp"
+            android:background="@drawable/bg_save_button"
+            android:paddingStart="16dp"
+            android:paddingTop="6dp"
+            android:paddingEnd="16dp"
+            android:paddingBottom="6dp"
+            android:text="保存"
+            android:textColor="#FFFFFF"
+            android:textSize="14sp"
+            android:textStyle="bold" />
+
+    </com.google.android.material.appbar.MaterialToolbar>
 
     <!-- 产品名称 -->
     <TextView
@@ -36,18 +55,83 @@
         android:layout_height="1dp"
         android:background="#EEEEEE" />
 
-    <!-- 话术内容滚动区域 -->
-    <ScrollView
+    <!-- 切换按钮 -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="#FAFAFA"
+        android:gravity="center"
+        android:orientation="horizontal"
+        android:padding="8dp">
+
+        <TextView
+            android:id="@+id/tv_tab_edit"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:background="@drawable/bg_tab_selected"
+            android:paddingStart="16dp"
+            android:paddingTop="6dp"
+            android:paddingEnd="16dp"
+            android:paddingBottom="6dp"
+            android:text="编辑"
+            android:textColor="#2196F3"
+            android:textSize="14sp" />
+
+        <TextView
+            android:id="@+id/tv_tab_preview"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:background="@drawable/bg_tab_normal"
+            android:paddingStart="16dp"
+            android:paddingTop="6dp"
+            android:paddingEnd="16dp"
+            android:paddingBottom="6dp"
+            android:text="预览"
+            android:textColor="#999999"
+            android:textSize="14sp" />
+
+    </LinearLayout>
+
+    <!-- 分隔线 -->
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="#EEEEEE" />
+
+    <!-- 编辑模式 -->
+    <EditText
+        android:id="@+id/et_script_edit"
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_weight="1"
-        android:fillViewport="true">
+        android:background="#FFFFFF"
+        android:gravity="top|start"
+        android:hint="输入话术内容..."
+        android:inputType="textMultiLine"
+        android:padding="16dp"
+        android:textColor="#333333"
+        android:textColorHint="#CCCCCC"
+        android:textSize="16sp"
+        android:fontFamily="monospace"
+        android:scrollbars="vertical"
+        android:overScrollMode="always"
+        android:visibility="visible" />
+
+    <!-- 预览模式 -->
+    <ScrollView
+        android:id="@+id/scroll_preview"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:fillViewport="true"
+        android:visibility="gone">
 
         <TextView
-            android:id="@+id/tv_script_content"
+            android:id="@+id/tv_script_preview"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:padding="20dp"
+            android:padding="16dp"
             android:textColor="#333333"
             android:textSize="16sp"
             android:lineSpacingExtra="6dp"
@@ -61,9 +145,9 @@
         android:layout_height="wrap_content"
         android:background="#F5F5F5"
         android:padding="8dp"
-        android:text="支持Markdown格式渲染"
+        android:text="支持Markdown格式：**粗体** *斜体* # 标题 - 列表"
         android:textColor="#999999"
-        android:textSize="12sp"
+        android:textSize="11sp"
         android:gravity="center" />
 
 </LinearLayout>
