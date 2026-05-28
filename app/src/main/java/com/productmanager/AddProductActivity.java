@@ -57,6 +57,7 @@ public class AddProductActivity extends AppCompatActivity {
     private EditText etRemark;
     private EditText etScript;
     private Button btnSave;
+    private Button btnViewScript;
 
     private ProductDatabase database;
     private ExecutorService executorService;
@@ -87,6 +88,9 @@ public class AddProductActivity extends AppCompatActivity {
         // 设置照片点击
         setupPhotoPicker();
 
+        // 设置查看话术按钮
+        setupViewScriptButton();
+
         // 设置保存按钮
         setupSaveButton();
 
@@ -107,6 +111,7 @@ public class AddProductActivity extends AppCompatActivity {
         etRemark = findViewById(R.id.et_remark);
         etScript = findViewById(R.id.et_script);
         btnSave = findViewById(R.id.btn_save);
+        btnViewScript = findViewById(R.id.btn_view_script);
     }
 
     private void setupToolbar() {
@@ -120,6 +125,24 @@ public class AddProductActivity extends AppCompatActivity {
 
     private void setupPhotoPicker() {
         ivPhoto.setOnClickListener(v -> showPhotoChooseDialog());
+    }
+
+    private void setupViewScriptButton() {
+        btnViewScript.setOnClickListener(v -> {
+            String script = etScript.getText().toString().trim();
+            String productName = etName.getText().toString().trim();
+
+            if (script.isEmpty()) {
+                Toast.makeText(this, "暂无话术内容", Toast.LENGTH_SHORT).show();
+                return;
+            }
+
+            // 打开话术全屏查看页面
+            Intent intent = new Intent(this, ScriptViewerActivity.class);
+            intent.putExtra(ScriptViewerActivity.EXTRA_PRODUCT_NAME, productName);
+            intent.putExtra(ScriptViewerActivity.EXTRA_SCRIPT, script);
+            startActivity(intent);
+        });
     }
 
     /**
@@ -399,11 +422,11 @@ public class AddProductActivity extends AppCompatActivity {
                     etMaterial.setText(currentProduct.getMaterial() != null ? currentProduct.getMaterial() : "");
                     etRemark.setText(currentProduct.getRemark() != null ? currentProduct.getRemark() : "");
                     etScript.setText(currentProduct.getScript() != null ? currentProduct.getScript() : "");
-                    
+
                     if (currentProduct.getPrice() != 0) {
                         etPrice.setText(String.valueOf(currentProduct.getPrice()));
                     }
-                    
+
                     currentPhotoPath = currentProduct.getPhotoPath();
 
                     if (currentPhotoPath != null && !currentPhotoPath.isEmpty()) {
@@ -467,7 +490,7 @@ public class AddProductActivity extends AppCompatActivity {
                 if (currentProduct == null) {
                     currentProduct = database.productDao().getProductById(productId);
                 }
-                
+
                 if (currentProduct == null) {
                     // 产品不存在，提示错误并返回
                     runOnUiThread(() -> {

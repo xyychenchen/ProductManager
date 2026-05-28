@@ -50,6 +50,12 @@
             android:label="设置"
             android:theme="@style/Theme.ProductManager" />
 
+        <activity
+            android:name=".ScriptViewerActivity"
+            android:exported="false"
+            android:label="话术查看"
+            android:theme="@style/Theme.ProductManager" />
+
         <!-- FileProvider 用于拍照临时文件共享 -->
         <provider
             android:name="androidx.core.content.FileProvider"
