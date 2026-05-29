@@ -39,8 +39,9 @@
 
     </LinearLayout>
 
-    <!-- 产品条目 -->
+    <!-- 产品条目内容区域 -->
     <LinearLayout
+        android:id="@+id/ll_product_content"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:background="#FFFFFF"
@@ -157,6 +158,7 @@
 
     <!-- 分隔线 -->
     <View
+        android:id="@+id/view_divider"
         android:layout_width="match_parent"
         android:layout_height="1dp"
         android:layout_marginStart="88dp"

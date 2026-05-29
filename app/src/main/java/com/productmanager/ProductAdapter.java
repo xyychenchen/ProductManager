@@ -195,6 +195,8 @@ public class ProductAdapter extends RecyclerView.Adapter<ProductAdapter.ProductV
         private LinearLayout llLetterHeader;
         private ImageView ivHeaderStar;
         private TextView tvLetterHeader;
+        private LinearLayout llProductContent;
+        private View viewDivider;
         private ImageView ivPhoto;
         private TextView tvName;
         private TextView tvSpecification;
@@ -208,6 +210,8 @@ public class ProductAdapter extends RecyclerView.Adapter<ProductAdapter.ProductV
             llLetterHeader = itemView.findViewById(R.id.ll_letter_header);
             ivHeaderStar = itemView.findViewById(R.id.iv_header_star);
             tvLetterHeader = itemView.findViewById(R.id.tv_letter_header);
+            llProductContent = itemView.findViewById(R.id.ll_product_content);
+            viewDivider = itemView.findViewById(R.id.view_divider);
             ivPhoto = itemView.findViewById(R.id.iv_photo);
             tvName = itemView.findViewById(R.id.tv_name);
             tvSpecification = itemView.findViewById(R.id.tv_specification);
@@ -241,30 +245,35 @@ public class ProductAdapter extends RecyclerView.Adapter<ProductAdapter.ProductV
         }
 
         void bindFavoriteHeader() {
+            // 显示字母头部
             llLetterHeader.setVisibility(View.VISIBLE);
             ivHeaderStar.setVisibility(View.VISIBLE);
             tvLetterHeader.setText("");
-            ivPhoto.setVisibility(View.GONE);
-            // 隐藏产品信息区域
-            itemView.findViewById(R.id.tv_name).setVisibility(View.GONE);
+            // 隐藏产品内容区域和分隔线
+            llProductContent.setVisibility(View.GONE);
+            viewDivider.setVisibility(View.GONE);
         }
 
         void bindLetterHeader(String letter) {
+            // 显示字母头部
             llLetterHeader.setVisibility(View.VISIBLE);
             ivHeaderStar.setVisibility(View.GONE);
             tvLetterHeader.setText(letter);
-            ivPhoto.setVisibility(View.GONE);
+            // 隐藏产品内容区域和分隔线
+            llProductContent.setVisibility(View.GONE);
+            viewDivider.setVisibility(View.GONE);
         }
 
         void bindProduct(Product product, boolean isFavoriteSection) {
-            // 隐藏头部
+            // 隐藏字母头部
             llLetterHeader.setVisibility(View.GONE);
-            ivPhoto.setVisibility(View.VISIBLE);
+            // 显示产品内容区域和分隔线
+            llProductContent.setVisibility(View.VISIBLE);
+            viewDivider.setVisibility(View.VISIBLE);
 
             // 设置产品名称
             String name = product.getName();
             tvName.setText(name != null ? name : "");
-            tvName.setVisibility(View.VISIBLE);
 
             // 设置规格
             String specification = product.getSpecification();
