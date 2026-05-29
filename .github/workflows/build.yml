@@ -51,14 +51,20 @@ jobs:
       id: date
       run: echo "date=$(date +'%Y%m%d_%H%M%S')" >> $GITHUB_OUTPUT
       
+    - name: Get version from build.gradle
+      id: version
+      run: |
+        VERSION_NAME=$(grep "versionName" app/build.gradle | sed 's/.*versionName "\([^"]*\)".*/\1/')
+        echo "version=$VERSION_NAME" >> $GITHUB_OUTPUT
+      
     - name: Create Release and Upload APK
       uses: softprops/action-gh-release@v1
       if: github.event_name == 'push' && github.ref == 'refs/heads/main'
       with:
-        tag_name: v1.1.${{ steps.date.outputs.date }}
-        name: Release ${{ steps.date.outputs.date }}
+        tag_name: v${{ steps.version.outputs.version }}
+        name: v${{ steps.version.outputs.version }} - 产品管理 APP
         body: |
-          ## 产品管理 APP
+          ## 产品管理 APP v${{ steps.version.outputs.version }}
           
           ### 下载说明
           - **app-debug.apk**: 调试版本，推荐下载
