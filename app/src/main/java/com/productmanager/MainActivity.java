@@ -30,6 +30,7 @@ import java.util.concurrent.Executors;
 /**
  * 主界面
  * 显示产品列表，支持字母索引快速查找
+ * 收藏的产品排在最前面
  */
 public class MainActivity extends AppCompatActivity implements SideIndexBar.OnLetterSelectedListener {
 
@@ -49,6 +50,7 @@ public class MainActivity extends AppCompatActivity implements SideIndexBar.OnLe
 
     private List<Product> currentProducts = new ArrayList<>();
     private int totalProductCount = 0;
+    private boolean hasFavorites = false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -115,6 +117,11 @@ public class MainActivity extends AppCompatActivity implements SideIndexBar.OnLe
             @Override
             public void onProductLongClick(Product product, int position) {
                 showDeleteDialog(product);
+            }
+
+            @Override
+            public void onFavoriteClick(Product product, int position) {
+                toggleFavorite(product);
             }
         });
 
@@ -190,10 +197,13 @@ public class MainActivity extends AppCompatActivity implements SideIndexBar.OnLe
             List<Product> products = database.productDao().getAllProducts();
             List<String> usedLetters = database.productDao().getUsedLetters();
             int count = products.size();
+            int favoriteCount = database.productDao().getFavoriteCount();
+            boolean favorites = favoriteCount > 0;
 
             runOnUiThread(() -> {
                 currentProducts = products;
                 totalProductCount = count;
+                hasFavorites = favorites;
                 adapter.setProducts(products);
                 updateEmptyView(products);
                 updateSideIndexBar(usedLetters);
@@ -202,9 +212,53 @@ public class MainActivity extends AppCompatActivity implements SideIndexBar.OnLe
         });
     }
 
+    /**
+     * 切换收藏状态
+     */
+    private void toggleFavorite(Product product) {
+        boolean newStatus = !product.isFavorite();
+        executorService.execute(() -> {
+            database.productDao().updateFavorite(product.getId(), newStatus);
+            
+            runOnUiThread(() -> {
+                // 更新产品对象
+                product.setFavorite(newStatus);
+                
+                // 显示提示
+                String message = newStatus ? "已收藏: " + product.getName() : "已取消收藏: " + product.getName();
+                Snackbar.make(fabAdd, message, Snackbar.LENGTH_SHORT).show();
+                
+                // 重新加载产品列表（重新排序）
+                loadProducts();
+            });
+        });
+    }
+
+    /**
+     * 滚动到收藏产品区域
+     */
+    private void scrollToStar() {
+        // 找到第一个收藏的产品
+        for (int i = 0; i < currentProducts.size(); i++) {
+            if (currentProducts.get(i).isFavorite()) {
+                LinearLayoutManager layoutManager = (LinearLayoutManager) recyclerView.getLayoutManager();
+                if (layoutManager != null) {
+                    layoutManager.scrollToPositionWithOffset(i, 0);
+                }
+                break;
+            }
+        }
+        
+        // 显示提示
+        tvOverlay.setText("★");
+        tvOverlay.setVisibility(View.VISIBLE);
+        tvOverlay.postDelayed(() -> tvOverlay.setVisibility(View.GONE), 500);
+    }
+
     private void updateSideIndexBar(List<String> usedLetters) {
         if (usedLetters == null || usedLetters.isEmpty()) {
             sideIndexBar.setLetters(new ArrayList<>());
+            sideIndexBar.setHasFavorites(false);
             return;
         }
 
@@ -219,6 +273,7 @@ public class MainActivity extends AppCompatActivity implements SideIndexBar.OnLe
         validLetters = new ArrayList<>(uniqueLetters);
 
         sideIndexBar.setLetters(validLetters);
+        sideIndexBar.setHasFavorites(hasFavorites);
     }
 
     private void searchProducts(String keyword) {
@@ -244,11 +299,22 @@ public class MainActivity extends AppCompatActivity implements SideIndexBar.OnLe
                 }
                 usedLetters = new ArrayList<>(letters);
             }
+            
+            // 检查搜索结果中是否有收藏
+            boolean favoritesInResult = false;
+            for (Product p : products) {
+                if (p.isFavorite()) {
+                    favoritesInResult = true;
+                    break;
+                }
+            }
 
             final List<String> finalUsedLetters = usedLetters;
             final int resultCount = products.size();
+            final boolean finalFavorites = favoritesInResult;
             runOnUiThread(() -> {
                 currentProducts = products;
+                hasFavorites = finalFavorites;
                 adapter.setProducts(products);
                 updateEmptyView(products);
                 updateSideIndexBar(finalUsedLetters);
@@ -303,10 +369,19 @@ public class MainActivity extends AppCompatActivity implements SideIndexBar.OnLe
         tvOverlay.setVisibility(View.GONE);
     }
 
+    @Override
+    public void onStarSelected() {
+        tvOverlay.setText("★");
+        tvOverlay.setVisibility(View.VISIBLE);
+        scrollToStar();
+    }
+
     private void scrollToLetter(String letter) {
+        // 跳转到第一个匹配字母的产品（跳过收藏区域）
         for (int i = 0; i < currentProducts.size(); i++) {
             Product product = currentProducts.get(i);
-            if (product.getFirstLetter().equalsIgnoreCase(letter)) {
+            // 只有非收藏的产品才按字母跳转
+            if (!product.isFavorite() && product.getFirstLetter().equalsIgnoreCase(letter)) {
                 LinearLayoutManager layoutManager = (LinearLayoutManager) recyclerView.getLayoutManager();
                 if (layoutManager != null) {
                     layoutManager.scrollToPositionWithOffset(i, 0);
@@ -323,8 +398,13 @@ public class MainActivity extends AppCompatActivity implements SideIndexBar.OnLe
         int firstVisiblePosition = layoutManager.findFirstVisibleItemPosition();
         if (firstVisiblePosition >= 0 && firstVisiblePosition < currentProducts.size()) {
             Product product = currentProducts.get(firstVisiblePosition);
-            String letter = product.getFirstLetter();
-            sideIndexBar.highlightLetter(letter);
+            // 如果是收藏产品，不更新高亮
+            if (!product.isFavorite()) {
+                String letter = product.getFirstLetter();
+                sideIndexBar.highlightLetter(letter);
+            } else {
+                sideIndexBar.clearHighlight();
+            }
         }
     }
 

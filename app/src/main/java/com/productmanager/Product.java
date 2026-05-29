@@ -23,11 +23,13 @@ public class Product {
     private String script;         // 产品话术（不显示在主页列表）
     private long createTime;       // 创建时间
     private long updateTime;       // 更新时间
+    private boolean isFavorite;    // 是否收藏
 
     // 构造函数
     public Product() {
         this.createTime = System.currentTimeMillis();
         this.updateTime = System.currentTimeMillis();
+        this.isFavorite = false;
     }
 
     // Getters and Setters
@@ -125,6 +127,15 @@ public class Product {
 
     public void setUpdateTime(long updateTime) {
         this.updateTime = updateTime;
+    }
+
+    public boolean isFavorite() {
+        return isFavorite;
+    }
+
+    public void setFavorite(boolean favorite) {
+        isFavorite = favorite;
+        this.updateTime = System.currentTimeMillis();
     }
 
     /**

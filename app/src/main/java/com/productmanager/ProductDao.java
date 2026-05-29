@@ -24,7 +24,7 @@ public interface ProductDao {
     @Delete
     void delete(Product product);
     
-    @Query("SELECT * FROM products ORDER BY name COLLATE NOCASE ASC")
+    @Query("SELECT * FROM products ORDER BY isFavorite DESC, name COLLATE NOCASE ASC")
     List<Product> getAllProducts();
     
     @Query("SELECT * FROM products WHERE id = :id")
@@ -36,7 +36,7 @@ public interface ProductDao {
            "size LIKE '%' || :keyword || '%' OR " +
            "material LIKE '%' || :keyword || '%' OR " +
            "remark LIKE '%' || :keyword || '%' " +
-           "ORDER BY name COLLATE NOCASE ASC")
+           "ORDER BY isFavorite DESC, name COLLATE NOCASE ASC")
     List<Product> searchProducts(String keyword);
     
     @Query("SELECT * FROM products WHERE name LIKE :letter || '%' ORDER BY name COLLATE NOCASE ASC")
@@ -47,4 +47,13 @@ public interface ProductDao {
     
     @Query("DELETE FROM products WHERE id = :id")
     void deleteById(int id);
+
+    @Query("UPDATE products SET isFavorite = :isFavorite WHERE id = :id")
+    void updateFavorite(int id, boolean isFavorite);
+
+    @Query("SELECT * FROM products WHERE isFavorite = 1 ORDER BY name COLLATE NOCASE ASC")
+    List<Product> getFavoriteProducts();
+
+    @Query("SELECT COUNT(*) FROM products WHERE isFavorite = 1")
+    int getFavoriteCount();
 }

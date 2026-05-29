@@ -17,7 +17,7 @@ import java.util.List;
 
 /**
  * 产品列表适配器
- * 显示产品信息，包括名称、规格、材质、价格
+ * 显示产品信息，包括名称、规格、材质、价格、收藏状态
  */
 public class ProductAdapter extends RecyclerView.Adapter<ProductAdapter.ProductViewHolder> {
 
@@ -27,6 +27,7 @@ public class ProductAdapter extends RecyclerView.Adapter<ProductAdapter.ProductV
     public interface OnProductClickListener {
         void onProductClick(Product product);
         void onProductLongClick(Product product, int position);
+        void onFavoriteClick(Product product, int position);
     }
 
     public void setOnProductClickListener(OnProductClickListener listener) {
@@ -67,6 +68,7 @@ public class ProductAdapter extends RecyclerView.Adapter<ProductAdapter.ProductV
         private TextView tvRemark;
         private TextView tvPrice;
         private TextView tvLetterHeader;
+        private ImageView ivFavorite;
 
         public ProductViewHolder(@NonNull View itemView) {
             super(itemView);
@@ -78,7 +80,9 @@ public class ProductAdapter extends RecyclerView.Adapter<ProductAdapter.ProductV
             tvRemark = itemView.findViewById(R.id.tv_remark);
             tvPrice = itemView.findViewById(R.id.tv_price);
             tvLetterHeader = itemView.findViewById(R.id.tv_letter_header);
+            ivFavorite = itemView.findViewById(R.id.iv_favorite);
 
+            // 产品点击事件
             itemView.setOnClickListener(v -> {
                 int pos = getAdapterPosition();
                 if (pos != RecyclerView.NO_POSITION && listener != null) {
@@ -86,12 +90,21 @@ public class ProductAdapter extends RecyclerView.Adapter<ProductAdapter.ProductV
                 }
             });
 
+            // 产品长按事件
             itemView.setOnLongClickListener(v -> {
                 int pos = getAdapterPosition();
                 if (pos != RecyclerView.NO_POSITION && listener != null) {
                     listener.onProductLongClick(products.get(pos), pos);
                 }
                 return true;
+            });
+
+            // 收藏星星点击事件
+            ivFavorite.setOnClickListener(v -> {
+                int pos = getAdapterPosition();
+                if (pos != RecyclerView.NO_POSITION && listener != null) {
+                    listener.onFavoriteClick(products.get(pos), pos);
+                }
             });
         }
 
@@ -157,19 +170,40 @@ public class ProductAdapter extends RecyclerView.Adapter<ProductAdapter.ProductV
                 ivPhoto.setImageResource(R.drawable.ic_product);
             }
 
-            // 设置字母头部
+            // 设置收藏星星
+            if (product.isFavorite()) {
+                ivFavorite.setImageResource(R.drawable.ic_favorite);
+            } else {
+                ivFavorite.setImageResource(R.drawable.ic_favorite_outline);
+            }
+
+            // 设置字母头部（考虑收藏产品排在前面）
             String letter = product.getFirstLetter();
             // 判断是否需要显示字母头部
             int position = getAdapterPosition();
             if (position == RecyclerView.NO_POSITION) {
                 return;
             }
+            
+            // 检查是否是收藏区域和字母区域的分界
             if (position == 0) {
+                // 第一个产品总是显示字母头部
                 tvLetterHeader.setText(letter);
                 tvLetterHeader.setVisibility(View.VISIBLE);
             } else if (position > 0 && position <= products.size() - 1) {
                 Product prevProduct = products.get(position - 1);
-                if (!prevProduct.getFirstLetter().equals(letter)) {
+                
+                // 如果前一个是收藏，当前不是收藏，需要显示新的字母头部
+                // 或者如果字母不同，显示新的字母头部
+                boolean prevIsFavorite = prevProduct.isFavorite();
+                boolean currentIsFavorite = product.isFavorite();
+                
+                if (prevIsFavorite != currentIsFavorite) {
+                    // 从收藏区进入非收藏区，显示字母头部
+                    tvLetterHeader.setText(letter);
+                    tvLetterHeader.setVisibility(View.VISIBLE);
+                } else if (!prevProduct.getFirstLetter().equals(letter)) {
+                    // 字母不同，显示新的字母头部
                     tvLetterHeader.setText(letter);
                     tvLetterHeader.setVisibility(View.VISIBLE);
                 } else {

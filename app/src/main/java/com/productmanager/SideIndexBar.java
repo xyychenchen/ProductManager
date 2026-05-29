@@ -3,6 +3,7 @@ package com.productmanager;
 import android.content.Context;
 import android.graphics.Canvas;
 import android.graphics.Paint;
+import android.graphics.Path;
 import android.util.AttributeSet;
 import android.view.MotionEvent;
 import android.view.View;
@@ -19,6 +20,7 @@ import java.util.List;
  * - 固定的字母间距，不管有多少字母
  * - 字母整体垂直居中
  * - 间距舒适，有空间感
+ * - 顶部显示收藏星星（如有收藏产品）
  */
 public class SideIndexBar extends View {
     
@@ -34,20 +36,31 @@ public class SideIndexBar extends View {
     // 字母文字大小（sp）
     private static final float LETTER_TEXT_SIZE_SP = 14f;
     
+    // 星星大小（dp）
+    private static final float STAR_SIZE_DP = 20f;
+    
     // 当前显示的字母列表（动态）
     private List<String> currentLetters = new ArrayList<>();
     
+    // 是否有收藏产品
+    private boolean hasFavorites = false;
+    
     private Paint paint;
     private Paint selectedPaint;
+    private Paint starPaint;
+    private Paint starOutlinePaint;
     private int selectedPosition = -1;
+    private boolean isStarSelected = false;
     private OnLetterSelectedListener listener;
     
     // 实际使用的间距（像素）
     private float letterSpacing;
+    private float starSize;
     
     public interface OnLetterSelectedListener {
         void onLetterSelected(String letter);
         void onLetterReleased();
+        void onStarSelected();
     }
     
     public void setOnLetterSelectedListener(OnLetterSelectedListener listener) {
@@ -78,6 +91,7 @@ public class SideIndexBar extends View {
         // 将 dp 转换为像素
         float density = context.getResources().getDisplayMetrics().density;
         letterSpacing = LETTER_SPACING_DP * density;
+        starSize = STAR_SIZE_DP * density;
         
         // 将 sp 转换为像素
         float scaledDensity = context.getResources().getDisplayMetrics().scaledDensity;
@@ -95,6 +109,19 @@ public class SideIndexBar extends View {
         selectedPaint.setColor(0xFF2196F3);
         selectedPaint.setFakeBoldText(true);
         selectedPaint.setTextAlign(Paint.Align.CENTER);
+        
+        // 填充星星画笔（金色）
+        starPaint = new Paint();
+        starPaint.setAntiAlias(true);
+        starPaint.setColor(0xFFFFD700);
+        starPaint.setStyle(Paint.Style.FILL);
+        
+        // 空心星星画笔（灰色）
+        starOutlinePaint = new Paint();
+        starOutlinePaint.setAntiAlias(true);
+        starOutlinePaint.setColor(0xFFCCCCCC);
+        starOutlinePaint.setStyle(Paint.Style.STROKE);
+        starOutlinePaint.setStrokeWidth(1.5f * density);
     }
     
     /**
@@ -124,33 +151,84 @@ public class SideIndexBar extends View {
     }
     
     /**
+     * 设置是否有收藏产品
+     */
+    public void setHasFavorites(boolean hasFavorites) {
+        this.hasFavorites = hasFavorites;
+        invalidate();
+    }
+    
+    /**
      * 获取当前显示的字母列表
      */
     public List<String> getCurrentLetters() {
         return new ArrayList<>(currentLetters);
     }
     
+    /**
+     * 绘制星星形状
+     */
+    private void drawStar(Canvas canvas, float centerX, float centerY, float size, boolean filled) {
+        Path path = new Path();
+        float outerRadius = size / 2;
+        float innerRadius = outerRadius * 0.4f;
+        
+        // 五角星有5个外顶点和5个内顶点
+        for (int i = 0; i < 10; i++) {
+            float radius = (i % 2 == 0) ? outerRadius : innerRadius;
+            double angle = Math.toRadians(i * 36 - 90); // 从顶部开始
+            float x = centerX + (float) (radius * Math.cos(angle));
+            float y = centerY + (float) (radius * Math.sin(angle));
+            
+            if (i == 0) {
+                path.moveTo(x, y);
+            } else {
+                path.lineTo(x, y);
+            }
+        }
+        path.close();
+        
+        if (filled) {
+            canvas.drawPath(path, starPaint);
+        } else {
+            canvas.drawPath(path, starOutlinePaint);
+        }
+    }
+    
     @Override
     protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
         
-        if (getHeight() == 0 || getWidth() == 0 || currentLetters.isEmpty()) {
+        if (getHeight() == 0 || getWidth() == 0) {
             return;
         }
         
         float centerX = getWidth() / 2f;
+        float starStartY = letterSpacing / 2; // 星星在最顶部
+        
+        // 绘制星星（如果有收藏）
+        if (hasFavorites) {
+            drawStar(canvas, centerX, starStartY, starSize, isStarSelected);
+        }
+        
+        // 字母列表起始位置（考虑星星的空间）
+        float letterStartY = hasFavorites ? starStartY + letterSpacing : letterSpacing / 2;
+        
+        if (currentLetters.isEmpty()) {
+            return;
+        }
+        
         int letterCount = currentLetters.size();
         
         // 计算所有字母需要的总高度
         float totalHeight = (letterCount - 1) * letterSpacing;
         
-        // 计算起始Y位置（使字母整体居中）
+        // 计算起始Y位置（使字母整体居中，在星星下方）
         float startY;
         if (letterCount == 1) {
-            // 只有一个字母时，放在正中间
-            startY = getHeight() / 2f;
+            startY = letterStartY + (getHeight() - letterStartY) / 2f;
         } else {
-            startY = (getHeight() - totalHeight) / 2f;
+            startY = letterStartY + (getHeight() - letterStartY - totalHeight) / 2f;
         }
         
         // 获取文字高度用于垂直居中
@@ -162,13 +240,13 @@ public class SideIndexBar extends View {
             float y = startY + i * letterSpacing;
             
             // 确保Y坐标在view范围内
-            if (y < letterSpacing / 2) {
-                y = letterSpacing / 2;
+            if (y < letterStartY) {
+                y = letterStartY;
             } else if (y > getHeight() - letterSpacing / 2) {
                 y = getHeight() - letterSpacing / 2;
             }
             
-            if (i == selectedPosition) {
+            if (i == selectedPosition && !isStarSelected) {
                 canvas.drawText(currentLetters.get(i), centerX, y + textOffset, selectedPaint);
             } else {
                 canvas.drawText(currentLetters.get(i), centerX, y + textOffset, paint);
@@ -178,20 +256,49 @@ public class SideIndexBar extends View {
     
     @Override
     public boolean onTouchEvent(MotionEvent event) {
+        float y = event.getY();
+        float centerX = getWidth() / 2f;
+        float starCenterY = letterSpacing / 2;
+        
+        // 检查是否点击了星星区域
+        boolean touchedStar = hasFavorites && Math.abs(y - starCenterY) < letterSpacing / 2;
+        
+        if (touchedStar && hasFavorites) {
+            switch (event.getAction()) {
+                case MotionEvent.ACTION_DOWN:
+                case MotionEvent.ACTION_MOVE:
+                    isStarSelected = true;
+                    selectedPosition = -1;
+                    invalidate();
+                    if (listener != null) {
+                        listener.onStarSelected();
+                    }
+                    break;
+                case MotionEvent.ACTION_UP:
+                case MotionEvent.ACTION_CANCEL:
+                    isStarSelected = false;
+                    invalidate();
+                    if (listener != null) {
+                        listener.onLetterReleased();
+                    }
+                    break;
+            }
+            return true;
+        }
+        
         if (currentLetters.isEmpty()) {
             return false;
         }
         
         int letterCount = currentLetters.size();
+        float letterStartY = hasFavorites ? letterSpacing : 0;
         float totalHeight = (letterCount - 1) * letterSpacing;
         float startY;
         if (letterCount == 1) {
-            startY = getHeight() / 2f;
+            startY = letterStartY + (getHeight() - letterStartY) / 2f;
         } else {
-            startY = (getHeight() - totalHeight) / 2f;
+            startY = letterStartY + (getHeight() - letterStartY - totalHeight) / 2f;
         }
-        
-        float y = event.getY();
         
         // 计算触摸位置对应的字母索引
         int position = -1;
@@ -222,6 +329,7 @@ public class SideIndexBar extends View {
             case MotionEvent.ACTION_DOWN:
             case MotionEvent.ACTION_MOVE:
                 selectedPosition = position;
+                isStarSelected = false;
                 invalidate();
                 if (listener != null) {
                     listener.onLetterSelected(currentLetters.get(position));
@@ -230,6 +338,7 @@ public class SideIndexBar extends View {
             case MotionEvent.ACTION_UP:
             case MotionEvent.ACTION_CANCEL:
                 selectedPosition = -1;
+                isStarSelected = false;
                 invalidate();
                 if (listener != null) {
                     listener.onLetterReleased();
@@ -246,6 +355,7 @@ public class SideIndexBar extends View {
         for (int i = 0; i < currentLetters.size(); i++) {
             if (currentLetters.get(i).equals(letter)) {
                 selectedPosition = i;
+                isStarSelected = false;
                 invalidate();
                 return;
             }
@@ -257,6 +367,7 @@ public class SideIndexBar extends View {
      */
     public void clearHighlight() {
         selectedPosition = -1;
+        isStarSelected = false;
         invalidate();
     }
 }

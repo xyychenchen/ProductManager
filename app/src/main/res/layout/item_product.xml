@@ -125,16 +125,35 @@
 
         </LinearLayout>
 
-        <!-- 价格 -->
-        <TextView
-            android:id="@+id/tv_price"
+        <!-- 收藏星星和价格容器 -->
+        <LinearLayout
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_gravity="center_vertical"
-            android:textColor="#4CAF50"
-            android:textSize="18sp"
-            android:textStyle="bold"
-            tools:text="$99.99" />
+            android:orientation="vertical"
+            android:gravity="center_horizontal">
+
+            <!-- 收藏星星 -->
+            <ImageView
+                android:id="@+id/iv_favorite"
+                android:layout_width="28dp"
+                android:layout_height="28dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:src="@drawable/ic_favorite_outline"
+                android:contentDescription="收藏" />
+
+            <!-- 价格 -->
+            <TextView
+                android:id="@+id/tv_price"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:textColor="#4CAF50"
+                android:textSize="16sp"
+                android:textStyle="bold"
+                tools:text="$99.99" />
+
+        </LinearLayout>
 
     </LinearLayout>
 
