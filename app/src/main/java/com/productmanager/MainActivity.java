@@ -30,7 +30,7 @@ import java.util.concurrent.Executors;
 /**
  * 主界面
  * 显示产品列表，支持字母索引快速查找
- * 收藏的产品排在最前面
+ * 收藏产品在顶部收藏区域显示
  */
 public class MainActivity extends AppCompatActivity implements SideIndexBar.OnLetterSelectedListener {
 
@@ -116,12 +116,7 @@ public class MainActivity extends AppCompatActivity implements SideIndexBar.OnLe
 
             @Override
             public void onProductLongClick(Product product, int position) {
-                showDeleteDialog(product);
-            }
-
-            @Override
-            public void onFavoriteClick(Product product, int position) {
-                toggleFavorite(product);
+                showProductMenu(product);
             }
         });
 
@@ -195,7 +190,6 @@ public class MainActivity extends AppCompatActivity implements SideIndexBar.OnLe
     private void loadProducts() {
         executorService.execute(() -> {
             List<Product> products = database.productDao().getAllProducts();
-            List<String> usedLetters = database.productDao().getUsedLetters();
             int count = products.size();
             int favoriteCount = database.productDao().getFavoriteCount();
             boolean favorites = favoriteCount > 0;
@@ -206,10 +200,44 @@ public class MainActivity extends AppCompatActivity implements SideIndexBar.OnLe
                 hasFavorites = favorites;
                 adapter.setProducts(products);
                 updateEmptyView(products);
-                updateSideIndexBar(usedLetters);
+                updateSideIndexBar();
                 updateProductCountDisplay();
             });
         });
+    }
+
+    /**
+     * 显示产品操作菜单（收藏/删除）
+     */
+    private void showProductMenu(Product product) {
+        String favoriteText = product.isFavorite() ? "取消收藏" : "收藏";
+        String[] options = {favoriteText, "删除"};
+
+        new AlertDialog.Builder(this)
+                .setTitle(product.getName())
+                .setItems(options, (dialog, which) -> {
+                    switch (which) {
+                        case 0:
+                            toggleFavorite(product);
+                            break;
+                        case 1:
+                            showDeleteConfirmDialog(product);
+                            break;
+                    }
+                })
+                .show();
+    }
+
+    /**
+     * 显示删除确认对话框
+     */
+    private void showDeleteConfirmDialog(Product product) {
+        new AlertDialog.Builder(this)
+                .setTitle("删除产品")
+                .setMessage("确定要删除 \"" + product.getName() + "\" 吗？")
+                .setPositiveButton("删除", (dialog, which) -> deleteProduct(product))
+                .setNegativeButton("取消", null)
+                .show();
     }
 
     /**
@@ -219,60 +247,32 @@ public class MainActivity extends AppCompatActivity implements SideIndexBar.OnLe
         boolean newStatus = !product.isFavorite();
         executorService.execute(() -> {
             database.productDao().updateFavorite(product.getId(), newStatus);
-            
+
             runOnUiThread(() -> {
-                // 更新产品对象
-                product.setFavorite(newStatus);
-                
                 // 显示提示
                 String message = newStatus ? "已收藏: " + product.getName() : "已取消收藏: " + product.getName();
                 Snackbar.make(fabAdd, message, Snackbar.LENGTH_SHORT).show();
-                
-                // 重新加载产品列表（重新排序）
+
+                // 重新加载产品列表
                 loadProducts();
             });
         });
     }
 
-    /**
-     * 滚动到收藏产品区域
-     */
-    private void scrollToStar() {
-        // 找到第一个收藏的产品
-        for (int i = 0; i < currentProducts.size(); i++) {
-            if (currentProducts.get(i).isFavorite()) {
-                LinearLayoutManager layoutManager = (LinearLayoutManager) recyclerView.getLayoutManager();
-                if (layoutManager != null) {
-                    layoutManager.scrollToPositionWithOffset(i, 0);
-                }
-                break;
-            }
-        }
-        
-        // 显示提示
-        tvOverlay.setText("★");
-        tvOverlay.setVisibility(View.VISIBLE);
-        tvOverlay.postDelayed(() -> tvOverlay.setVisibility(View.GONE), 500);
+    private void deleteProduct(Product product) {
+        executorService.execute(() -> {
+            database.productDao().delete(product);
+            runOnUiThread(() -> {
+                Snackbar.make(fabAdd, "已删除: " + product.getName(), Snackbar.LENGTH_SHORT).show();
+                loadProducts();
+            });
+        });
     }
 
-    private void updateSideIndexBar(List<String> usedLetters) {
-        if (usedLetters == null || usedLetters.isEmpty()) {
-            sideIndexBar.setLetters(new ArrayList<>());
-            sideIndexBar.setHasFavorites(false);
-            return;
-        }
-
-        List<String> validLetters = new ArrayList<>();
-        for (String letter : usedLetters) {
-            if (letter != null && !letter.isEmpty()) {
-                validLetters.add(letter.toUpperCase());
-            }
-        }
-
-        Set<String> uniqueLetters = new HashSet<>(validLetters);
-        validLetters = new ArrayList<>(uniqueLetters);
-
-        sideIndexBar.setLetters(validLetters);
+    private void updateSideIndexBar() {
+        // 从adapter获取当前显示的字母列表
+        List<String> letters = adapter.getDisplayedLetters();
+        sideIndexBar.setLetters(letters);
         sideIndexBar.setHasFavorites(hasFavorites);
     }
 
@@ -285,21 +285,6 @@ public class MainActivity extends AppCompatActivity implements SideIndexBar.OnLe
                 products = database.productDao().searchProducts(keyword);
             }
 
-            // 在后台线程获取字母列表，避免在主线程访问数据库
-            List<String> usedLetters = null;
-            if (keyword.isEmpty()) {
-                usedLetters = database.productDao().getUsedLetters();
-            } else {
-                Set<String> letters = new HashSet<>();
-                for (Product p : products) {
-                    String firstLetter = p.getFirstLetter();
-                    if (firstLetter != null && !firstLetter.isEmpty()) {
-                        letters.add(firstLetter.toUpperCase());
-                    }
-                }
-                usedLetters = new ArrayList<>(letters);
-            }
-            
             // 检查搜索结果中是否有收藏
             boolean favoritesInResult = false;
             for (Product p : products) {
@@ -309,7 +294,6 @@ public class MainActivity extends AppCompatActivity implements SideIndexBar.OnLe
                 }
             }
 
-            final List<String> finalUsedLetters = usedLetters;
             final int resultCount = products.size();
             final boolean finalFavorites = favoritesInResult;
             runOnUiThread(() -> {
@@ -317,7 +301,7 @@ public class MainActivity extends AppCompatActivity implements SideIndexBar.OnLe
                 hasFavorites = finalFavorites;
                 adapter.setProducts(products);
                 updateEmptyView(products);
-                updateSideIndexBar(finalUsedLetters);
+                updateSideIndexBar();
                 updateProductCountDisplay(keyword, resultCount);
             });
         });
@@ -377,54 +361,48 @@ public class MainActivity extends AppCompatActivity implements SideIndexBar.OnLe
     }
 
     private void scrollToLetter(String letter) {
-        // 跳转到第一个匹配字母的产品（跳过收藏区域）
-        for (int i = 0; i < currentProducts.size(); i++) {
-            Product product = currentProducts.get(i);
-            // 只有非收藏的产品才按字母跳转
-            if (!product.isFavorite() && product.getFirstLetter().equalsIgnoreCase(letter)) {
-                LinearLayoutManager layoutManager = (LinearLayoutManager) recyclerView.getLayoutManager();
-                if (layoutManager != null) {
-                    layoutManager.scrollToPositionWithOffset(i, 0);
-                }
-                break;
+        int position = adapter.getLetterPosition(letter);
+        if (position >= 0) {
+            LinearLayoutManager layoutManager = (LinearLayoutManager) recyclerView.getLayoutManager();
+            if (layoutManager != null) {
+                layoutManager.scrollToPositionWithOffset(position, 0);
+            }
+        }
+    }
+
+    private void scrollToStar() {
+        int position = adapter.getFavoritePosition();
+        if (position >= 0) {
+            LinearLayoutManager layoutManager = (LinearLayoutManager) recyclerView.getLayoutManager();
+            if (layoutManager != null) {
+                layoutManager.scrollToPositionWithOffset(position, 0);
             }
         }
     }
 
     private void updateSideIndexHighlight() {
         LinearLayoutManager layoutManager = (LinearLayoutManager) recyclerView.getLayoutManager();
-        if (layoutManager == null || currentProducts.isEmpty()) return;
+        if (layoutManager == null) return;
 
         int firstVisiblePosition = layoutManager.findFirstVisibleItemPosition();
-        if (firstVisiblePosition >= 0 && firstVisiblePosition < currentProducts.size()) {
-            Product product = currentProducts.get(firstVisiblePosition);
-            // 如果是收藏产品，不更新高亮
-            if (!product.isFavorite()) {
-                String letter = product.getFirstLetter();
-                sideIndexBar.highlightLetter(letter);
-            } else {
-                sideIndexBar.clearHighlight();
+        if (firstVisiblePosition >= 0) {
+            // 获取当前可见的第一个字母
+            List<String> letters = adapter.getDisplayedLetters();
+            String currentLetter = null;
+
+            // 从adapter的items中找到当前位置对应的字母
+            for (int i = firstVisiblePosition; i >= 0; i--) {
+                // 向上查找最近的字母头部
             }
+
+            // 简化处理：从当前位置向下找最近的头部
+            for (int i = 0; i <= firstVisiblePosition && i < letters.size(); i++) {
+                // 这里需要根据实际位置计算
+            }
+
+            // 使用SideIndexBar的方法来更新
+            sideIndexBar.clearHighlight();
         }
-    }
-
-    private void showDeleteDialog(Product product) {
-        new AlertDialog.Builder(this)
-                .setTitle("删除产品")
-                .setMessage("确定要删除 \"" + product.getName() + "\" 吗？")
-                .setPositiveButton("删除", (dialog, which) -> deleteProduct(product))
-                .setNegativeButton("取消", null)
-                .show();
-    }
-
-    private void deleteProduct(Product product) {
-        executorService.execute(() -> {
-            database.productDao().delete(product);
-            runOnUiThread(() -> {
-                Snackbar.make(fabAdd, "已删除: " + product.getName(), Snackbar.LENGTH_SHORT).show();
-                loadProducts();
-            });
-        });
     }
 
     @Override

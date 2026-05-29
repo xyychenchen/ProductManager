@@ -6,21 +6,38 @@
     android:layout_height="wrap_content"
     android:orientation="vertical">
 
-    <!-- 字母头部 -->
-    <TextView
-        android:id="@+id/tv_letter_header"
+    <!-- 字母头部 - 支持显示星标或字母 -->
+    <LinearLayout
+        android:id="@+id/ll_letter_header"
         android:layout_width="match_parent"
         android:layout_height="32dp"
         android:background="#F0F0F0"
         android:gravity="center_vertical"
+        android:orientation="horizontal"
         android:paddingStart="16dp"
         android:paddingEnd="16dp"
-        android:textColor="#2196F3"
-        android:textSize="14sp"
-        android:textStyle="bold"
         android:visibility="gone"
-        tools:text="A"
-        tools:visibility="visible" />
+        tools:visibility="visible">
+
+        <!-- 收藏星标图标 -->
+        <ImageView
+            android:id="@+id/iv_header_star"
+            android:layout_width="18dp"
+            android:layout_height="18dp"
+            android:src="@drawable/ic_favorite"
+            android:visibility="gone" />
+
+        <!-- 字母文字 -->
+        <TextView
+            android:id="@+id/tv_letter_header"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textColor="#2196F3"
+            android:textSize="14sp"
+            android:textStyle="bold"
+            tools:text="A" />
+
+    </LinearLayout>
 
     <!-- 产品条目 -->
     <LinearLayout
@@ -125,35 +142,16 @@
 
         </LinearLayout>
 
-        <!-- 收藏星星和价格容器 -->
-        <LinearLayout
+        <!-- 价格 -->
+        <TextView
+            android:id="@+id/tv_price"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_gravity="center_vertical"
-            android:orientation="vertical"
-            android:gravity="center_horizontal">
-
-            <!-- 收藏星星 -->
-            <ImageView
-                android:id="@+id/iv_favorite"
-                android:layout_width="28dp"
-                android:layout_height="28dp"
-                android:background="?attr/selectableItemBackgroundBorderless"
-                android:src="@drawable/ic_favorite_outline"
-                android:contentDescription="收藏" />
-
-            <!-- 价格 -->
-            <TextView
-                android:id="@+id/tv_price"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="2dp"
-                android:textColor="#4CAF50"
-                android:textSize="16sp"
-                android:textStyle="bold"
-                tools:text="$99.99" />
-
-        </LinearLayout>
+            android:textColor="#4CAF50"
+            android:textSize="18sp"
+            android:textStyle="bold"
+            tools:text="$99.99" />
 
     </LinearLayout>
 

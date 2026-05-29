@@ -4,6 +4,7 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ImageView;
+import android.widget.LinearLayout;
 import android.widget.TextView;
 
 import androidx.annotation.NonNull;
@@ -13,30 +14,110 @@ import com.bumptech.glide.Glide;
 
 import java.io.File;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
 
 /**
  * 产品列表适配器
- * 显示产品信息，包括名称、规格、材质、价格、收藏状态
+ * 显示产品信息，支持收藏区域和字母区域
  */
 public class ProductAdapter extends RecyclerView.Adapter<ProductAdapter.ProductViewHolder> {
 
-    private List<Product> products = new ArrayList<>();
+    // 列表项类型
+    private static final int TYPE_FAVORITE_HEADER = 0;
+    private static final int TYPE_LETTER_HEADER = 1;
+    private static final int TYPE_PRODUCT = 2;
+
+    // 列表项包装类
+    private static class ListItem {
+        final int type;
+        final String letter;      // 字母头部的字母
+        final Product product;    // 产品
+        final boolean isFavoriteSection; // 是否是收藏区域的产品
+
+        ListItem(int type, String letter) {
+            this.type = type;
+            this.letter = letter;
+            this.product = null;
+            this.isFavoriteSection = false;
+        }
+
+        ListItem(Product product, boolean isFavoriteSection) {
+            this.type = TYPE_PRODUCT;
+            this.product = product;
+            this.letter = null;
+            this.isFavoriteSection = isFavoriteSection;
+        }
+    }
+
+    private List<ListItem> items = new ArrayList<>();
     private OnProductClickListener listener;
 
     public interface OnProductClickListener {
         void onProductClick(Product product);
         void onProductLongClick(Product product, int position);
-        void onFavoriteClick(Product product, int position);
     }
 
     public void setOnProductClickListener(OnProductClickListener listener) {
         this.listener = listener;
     }
 
+    /**
+     * 设置产品列表，自动处理收藏区域和字母区域
+     */
     public void setProducts(List<Product> products) {
-        this.products = products;
+        items.clear();
+
+        if (products == null || products.isEmpty()) {
+            notifyDataSetChanged();
+            return;
+        }
+
+        // 分离收藏产品和普通产品
+        List<Product> favoriteProducts = new ArrayList<>();
+        List<Product> allProducts = new ArrayList<>();
+
+        for (Product p : products) {
+            if (p.isFavorite()) {
+                favoriteProducts.add(p);
+            }
+            allProducts.add(p);
+        }
+
+        // 按字母排序收藏产品
+        Collections.sort(favoriteProducts, Comparator.comparing(p -> p.getName() != null ? p.getName().toLowerCase() : ""));
+
+        // 按字母排序所有产品
+        Collections.sort(allProducts, Comparator.comparing(p -> p.getName() != null ? p.getName().toLowerCase() : ""));
+
+        // 1. 添加收藏区域（如果有收藏产品）
+        if (!favoriteProducts.isEmpty()) {
+            // 收藏区域头部
+            items.add(new ListItem(TYPE_FAVORITE_HEADER, "★"));
+            // 收藏区域产品
+            for (Product p : favoriteProducts) {
+                items.add(new ListItem(p, true));
+            }
+        }
+
+        // 2. 添加字母区域
+        String currentLetter = null;
+        for (Product p : allProducts) {
+            String letter = p.getFirstLetter();
+            if (currentLetter == null || !currentLetter.equals(letter)) {
+                currentLetter = letter;
+                items.add(new ListItem(TYPE_LETTER_HEADER, letter));
+            }
+            items.add(new ListItem(p, false));
+        }
+
         notifyDataSetChanged();
+    }
+
+    @Override
+    public int getItemViewType(int position) {
+        return items.get(position).type;
     }
 
     @NonNull
@@ -49,17 +130,71 @@ public class ProductAdapter extends RecyclerView.Adapter<ProductAdapter.ProductV
 
     @Override
     public void onBindViewHolder(@NonNull ProductViewHolder holder, int position) {
-        Product product = products.get(position);
-        holder.bind(product);
+        ListItem item = items.get(position);
+
+        switch (item.type) {
+            case TYPE_FAVORITE_HEADER:
+                holder.bindFavoriteHeader();
+                break;
+            case TYPE_LETTER_HEADER:
+                holder.bindLetterHeader(item.letter);
+                break;
+            case TYPE_PRODUCT:
+                holder.bindProduct(item.product, item.isFavoriteSection);
+                break;
+        }
     }
 
     @Override
     public int getItemCount() {
-        return products.size();
+        return items.size();
+    }
+
+    /**
+     * 获取指定字母在列表中的位置
+     */
+    public int getLetterPosition(String letter) {
+        for (int i = 0; i < items.size(); i++) {
+            ListItem item = items.get(i);
+            if (item.type == TYPE_LETTER_HEADER && item.letter != null && item.letter.equalsIgnoreCase(letter)) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    /**
+     * 获取收藏区域的起始位置
+     */
+    public int getFavoritePosition() {
+        for (int i = 0; i < items.size(); i++) {
+            if (items.get(i).type == TYPE_FAVORITE_HEADER) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    /**
+     * 获取当前显示的字母列表（包含★如果有收藏）
+     */
+    public List<String> getDisplayedLetters() {
+        List<String> letters = new ArrayList<>();
+        for (ListItem item : items) {
+            if (item.type == TYPE_FAVORITE_HEADER) {
+                letters.add("★");
+            } else if (item.type == TYPE_LETTER_HEADER) {
+                letters.add(item.letter);
+            }
+        }
+        return letters;
     }
 
     class ProductViewHolder extends RecyclerView.ViewHolder {
 
+        private LinearLayout llLetterHeader;
+        private ImageView ivHeaderStar;
+        private TextView tvLetterHeader;
         private ImageView ivPhoto;
         private TextView tvName;
         private TextView tvSpecification;
@@ -67,11 +202,12 @@ public class ProductAdapter extends RecyclerView.Adapter<ProductAdapter.ProductV
         private TextView tvMaterial;
         private TextView tvRemark;
         private TextView tvPrice;
-        private TextView tvLetterHeader;
-        private ImageView ivFavorite;
 
         public ProductViewHolder(@NonNull View itemView) {
             super(itemView);
+            llLetterHeader = itemView.findViewById(R.id.ll_letter_header);
+            ivHeaderStar = itemView.findViewById(R.id.iv_header_star);
+            tvLetterHeader = itemView.findViewById(R.id.tv_letter_header);
             ivPhoto = itemView.findViewById(R.id.iv_photo);
             tvName = itemView.findViewById(R.id.tv_name);
             tvSpecification = itemView.findViewById(R.id.tv_specification);
@@ -79,14 +215,15 @@ public class ProductAdapter extends RecyclerView.Adapter<ProductAdapter.ProductV
             tvMaterial = itemView.findViewById(R.id.tv_material);
             tvRemark = itemView.findViewById(R.id.tv_remark);
             tvPrice = itemView.findViewById(R.id.tv_price);
-            tvLetterHeader = itemView.findViewById(R.id.tv_letter_header);
-            ivFavorite = itemView.findViewById(R.id.iv_favorite);
 
             // 产品点击事件
             itemView.setOnClickListener(v -> {
                 int pos = getAdapterPosition();
                 if (pos != RecyclerView.NO_POSITION && listener != null) {
-                    listener.onProductClick(products.get(pos));
+                    ListItem item = items.get(pos);
+                    if (item.type == TYPE_PRODUCT && item.product != null) {
+                        listener.onProductClick(item.product);
+                    }
                 }
             });
 
@@ -94,26 +231,42 @@ public class ProductAdapter extends RecyclerView.Adapter<ProductAdapter.ProductV
             itemView.setOnLongClickListener(v -> {
                 int pos = getAdapterPosition();
                 if (pos != RecyclerView.NO_POSITION && listener != null) {
-                    listener.onProductLongClick(products.get(pos), pos);
+                    ListItem item = items.get(pos);
+                    if (item.type == TYPE_PRODUCT && item.product != null) {
+                        listener.onProductLongClick(item.product, pos);
+                    }
                 }
                 return true;
             });
-
-            // 收藏星星点击事件
-            ivFavorite.setOnClickListener(v -> {
-                int pos = getAdapterPosition();
-                if (pos != RecyclerView.NO_POSITION && listener != null) {
-                    listener.onFavoriteClick(products.get(pos), pos);
-                }
-            });
         }
 
-        public void bind(Product product) {
-            // 设置产品名称（添加空值检查）
+        void bindFavoriteHeader() {
+            llLetterHeader.setVisibility(View.VISIBLE);
+            ivHeaderStar.setVisibility(View.VISIBLE);
+            tvLetterHeader.setText("");
+            ivPhoto.setVisibility(View.GONE);
+            // 隐藏产品信息区域
+            itemView.findViewById(R.id.tv_name).setVisibility(View.GONE);
+        }
+
+        void bindLetterHeader(String letter) {
+            llLetterHeader.setVisibility(View.VISIBLE);
+            ivHeaderStar.setVisibility(View.GONE);
+            tvLetterHeader.setText(letter);
+            ivPhoto.setVisibility(View.GONE);
+        }
+
+        void bindProduct(Product product, boolean isFavoriteSection) {
+            // 隐藏头部
+            llLetterHeader.setVisibility(View.GONE);
+            ivPhoto.setVisibility(View.VISIBLE);
+
+            // 设置产品名称
             String name = product.getName();
             tvName.setText(name != null ? name : "");
+            tvName.setVisibility(View.VISIBLE);
 
-            // 设置规格（添加空值检查）
+            // 设置规格
             String specification = product.getSpecification();
             if (specification != null && !specification.isEmpty()) {
                 tvSpecification.setText("规格: " + specification);
@@ -122,7 +275,7 @@ public class ProductAdapter extends RecyclerView.Adapter<ProductAdapter.ProductV
                 tvSpecification.setVisibility(View.GONE);
             }
 
-            // 设置尺寸（添加空值检查）
+            // 设置尺寸
             String size = product.getSize();
             if (size != null && !size.isEmpty()) {
                 tvSize.setText("尺寸: " + size);
@@ -131,7 +284,7 @@ public class ProductAdapter extends RecyclerView.Adapter<ProductAdapter.ProductV
                 tvSize.setVisibility(View.GONE);
             }
 
-            // 设置材质（添加空值检查）
+            // 设置材质
             String material = product.getMaterial();
             if (material != null && !material.isEmpty()) {
                 tvMaterial.setText("材质: " + material);
@@ -140,7 +293,7 @@ public class ProductAdapter extends RecyclerView.Adapter<ProductAdapter.ProductV
                 tvMaterial.setVisibility(View.GONE);
             }
 
-            // 设置备注（添加空值检查）
+            // 设置备注
             String remark = product.getRemark();
             if (remark != null && !remark.isEmpty()) {
                 tvRemark.setText("备注: " + remark);
@@ -149,10 +302,10 @@ public class ProductAdapter extends RecyclerView.Adapter<ProductAdapter.ProductV
                 tvRemark.setVisibility(View.GONE);
             }
 
-            // 设置价格（美金格式）
+            // 设置价格
             tvPrice.setText(product.getFormattedPrice());
 
-            // 设置产品照片（添加空值检查）
+            // 设置产品照片
             String photoPath = product.getPhotoPath();
             if (photoPath != null && !photoPath.isEmpty()) {
                 File photoFile = new File(photoPath);
@@ -168,47 +321,6 @@ public class ProductAdapter extends RecyclerView.Adapter<ProductAdapter.ProductV
                 }
             } else {
                 ivPhoto.setImageResource(R.drawable.ic_product);
-            }
-
-            // 设置收藏星星
-            if (product.isFavorite()) {
-                ivFavorite.setImageResource(R.drawable.ic_favorite);
-            } else {
-                ivFavorite.setImageResource(R.drawable.ic_favorite_outline);
-            }
-
-            // 设置字母头部（考虑收藏产品排在前面）
-            String letter = product.getFirstLetter();
-            // 判断是否需要显示字母头部
-            int position = getAdapterPosition();
-            if (position == RecyclerView.NO_POSITION) {
-                return;
-            }
-            
-            // 检查是否是收藏区域和字母区域的分界
-            if (position == 0) {
-                // 第一个产品总是显示字母头部
-                tvLetterHeader.setText(letter);
-                tvLetterHeader.setVisibility(View.VISIBLE);
-            } else if (position > 0 && position <= products.size() - 1) {
-                Product prevProduct = products.get(position - 1);
-                
-                // 如果前一个是收藏，当前不是收藏，需要显示新的字母头部
-                // 或者如果字母不同，显示新的字母头部
-                boolean prevIsFavorite = prevProduct.isFavorite();
-                boolean currentIsFavorite = product.isFavorite();
-                
-                if (prevIsFavorite != currentIsFavorite) {
-                    // 从收藏区进入非收藏区，显示字母头部
-                    tvLetterHeader.setText(letter);
-                    tvLetterHeader.setVisibility(View.VISIBLE);
-                } else if (!prevProduct.getFirstLetter().equals(letter)) {
-                    // 字母不同，显示新的字母头部
-                    tvLetterHeader.setText(letter);
-                    tvLetterHeader.setVisibility(View.VISIBLE);
-                } else {
-                    tvLetterHeader.setVisibility(View.GONE);
-                }
             }
         }
     }
