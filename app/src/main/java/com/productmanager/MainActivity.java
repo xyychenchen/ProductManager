@@ -1,18 +1,19 @@
 package com.productmanager;
 
-import android.app.AlertDialog;
 import android.content.Intent;
-import android.os.Build;
 import android.os.Bundle;
-import android.os.VibrationEffect;
-import android.os.Vibrator;
+import android.os.Handler;
+import android.os.Looper;
 import android.text.Editable;
 import android.text.TextWatcher;
+import android.view.HapticFeedbackConstants;
 import android.view.View;
+import android.view.inputmethod.InputMethodManager;
 import android.widget.EditText;
 import android.widget.ImageView;
 import android.widget.TextView;
 
+import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
@@ -21,23 +22,23 @@ import com.google.android.material.floatingactionbutton.FloatingActionButton;
 import com.google.android.material.snackbar.Snackbar;
 
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 /**
  * 主界面
- * 显示产品列表，支持字母索引快速查找
- * 收藏产品在顶部收藏区域显示
+ *
+ * 显示产品列表，支持字母索引快速查找；收藏产品在顶部收藏区域显示。
  */
 public class MainActivity extends AppCompatActivity implements SideIndexBar.OnLetterSelectedListener {
+
+    /** 搜索防抖间隔：连续输入时只在停顿后查一次库 */
+    private static final long SEARCH_DEBOUNCE_MS = 250L;
 
     private RecyclerView recyclerView;
     private ProductAdapter adapter;
     private SideIndexBar sideIndexBar;
-    private ImageView ivSettings;
     private ImageView ivClear;
     private EditText etSearch;
     private TextView tvEmptyView;
@@ -48,39 +49,29 @@ public class MainActivity extends AppCompatActivity implements SideIndexBar.OnLe
     private ProductDatabase database;
     private ExecutorService executorService;
 
-    private List<Product> currentProducts = new ArrayList<>();
+    private final Handler handler = new Handler(Looper.getMainLooper());
+    private Runnable pendingSearch;
+
+    private List<ProductListItem> currentItems = new ArrayList<>();
+    private String currentKeyword = "";
     private int totalProductCount = 0;
-    private boolean hasFavorites = false;
+    private String highlightedLetter;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        // 初始化数据库
         database = ProductDatabase.getDatabase(this);
         executorService = Executors.newSingleThreadExecutor();
 
-        // 初始化视图
         initViews();
-
-        // 设置RecyclerView
         setupRecyclerView();
-
-        // 设置搜索功能
         setupSearch();
-
-        // 设置清除按钮
         setupClearButton();
-
-        // 设置字母索引栏
         setupSideIndexBar();
-
-        // 设置添加按钮
         setupFab();
-
-        // 加载数据
-        loadProducts();
+        // 数据加载统一放在 onResume，避免启动时重复查询两次
     }
 
     private void initViews() {
@@ -92,12 +83,10 @@ public class MainActivity extends AppCompatActivity implements SideIndexBar.OnLe
         tvOverlay = findViewById(R.id.tv_overlay);
         tvProductCount = findViewById(R.id.tv_product_count);
         fabAdd = findViewById(R.id.fab_add);
-        ivSettings = findViewById(R.id.iv_settings);
 
-        // 设置按钮点击事件
-        ivSettings.setOnClickListener(v -> {
-            Intent intent = new Intent(MainActivity.this, SettingsActivity.class);
-            startActivity(intent);
+        findViewById(R.id.iv_settings).setOnClickListener(v -> {
+            // 从设置页返回后数据可能变化，交给 onResume 刷新
+            startActivity(new Intent(MainActivity.this, SettingsActivity.class));
         });
     }
 
@@ -108,14 +97,14 @@ public class MainActivity extends AppCompatActivity implements SideIndexBar.OnLe
 
         adapter.setOnProductClickListener(new ProductAdapter.OnProductClickListener() {
             @Override
-            public void onProductClick(Product product) {
+            public void onProductClick(ProductListItem product) {
                 Intent intent = new Intent(MainActivity.this, AddProductActivity.class);
-                intent.putExtra("product_id", product.getId());
+                intent.putExtra(AddProductActivity.EXTRA_PRODUCT_ID, product.id);
                 startActivity(intent);
             }
 
             @Override
-            public void onProductLongClick(Product product, int position) {
+            public void onProductLongClick(ProductListItem product) {
                 showProductMenu(product);
             }
         });
@@ -124,7 +113,7 @@ public class MainActivity extends AppCompatActivity implements SideIndexBar.OnLe
             @Override
             public void onScrolled(RecyclerView recyclerView, int dx, int dy) {
                 super.onScrolled(recyclerView, dx, dy);
-                updateSideIndexHighlight();
+                syncIndexHighlight();
             }
         });
     }
@@ -132,17 +121,18 @@ public class MainActivity extends AppCompatActivity implements SideIndexBar.OnLe
     private void setupSearch() {
         etSearch.addTextChangedListener(new TextWatcher() {
             @Override
-            public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+            public void beforeTextChanged(CharSequence s, int start, int count, int after) {
+            }
 
             @Override
-            public void onTextChanged(CharSequence s, int start, int before, int count) {}
+            public void onTextChanged(CharSequence s, int start, int before, int count) {
+            }
 
             @Override
             public void afterTextChanged(Editable s) {
                 String keyword = s.toString().trim();
-                // 显示/隐藏清除按钮
                 ivClear.setVisibility(keyword.isEmpty() ? View.GONE : View.VISIBLE);
-                searchProducts(keyword);
+                scheduleSearch(keyword);
             }
         });
     }
@@ -151,8 +141,7 @@ public class MainActivity extends AppCompatActivity implements SideIndexBar.OnLe
         ivClear.setOnClickListener(v -> {
             etSearch.setText("");
             etSearch.clearFocus();
-            // 隐藏软键盘
-            android.view.inputmethod.InputMethodManager imm = (android.view.inputmethod.InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
+            InputMethodManager imm = (InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
             if (imm != null) {
                 imm.hideSoftInputFromWindow(etSearch.getWindowToken(), 0);
             }
@@ -165,181 +154,187 @@ public class MainActivity extends AppCompatActivity implements SideIndexBar.OnLe
 
     private void setupFab() {
         fabAdd.setOnClickListener(v -> {
-            // 触发震动反馈
-            performHapticFeedback();
-
-            Intent intent = new Intent(MainActivity.this, AddProductActivity.class);
-            startActivity(intent);
+            v.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY);
+            startActivity(new Intent(MainActivity.this, AddProductActivity.class));
         });
     }
 
+    // ================= 数据加载 =================
+
     /**
-     * 执行震动反馈
+     * 防抖查询：连续输入时只保留最后一次请求
      */
-    private void performHapticFeedback() {
-        Vibrator vibrator = (Vibrator) getSystemService(VIBRATOR_SERVICE);
-        if (vibrator != null && vibrator.hasVibrator()) {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                vibrator.vibrate(VibrationEffect.createOneShot(30, VibrationEffect.DEFAULT_AMPLITUDE));
-            } else {
-                vibrator.vibrate(30);
-            }
+    private void scheduleSearch(String keyword) {
+        currentKeyword = keyword;
+        if (pendingSearch != null) {
+            handler.removeCallbacks(pendingSearch);
         }
+        pendingSearch = () -> loadItems(keyword);
+        handler.postDelayed(pendingSearch, SEARCH_DEBOUNCE_MS);
     }
 
-    private void loadProducts() {
+    private void loadItems(String keyword) {
+        final String query = keyword == null ? "" : keyword;
         executorService.execute(() -> {
-            List<Product> products = database.productDao().getAllProducts();
-            int count = products.size();
-            int favoriteCount = database.productDao().getFavoriteCount();
-            boolean favorites = favoriteCount > 0;
-
-            runOnUiThread(() -> {
-                currentProducts = products;
-                totalProductCount = count;
-                hasFavorites = favorites;
-                adapter.setProducts(products);
-                updateEmptyView(products);
-                updateSideIndexBar();
-                updateProductCountDisplay();
-            });
+            List<ProductListItem> items = query.isEmpty()
+                    ? database.productDao().getAllItems()
+                    : database.productDao().searchItems(ProductDao.toLikePattern(query));
+            handler.post(() -> submit(query, items));
         });
     }
 
-    /**
-     * 显示产品操作菜单（收藏/删除）
-     */
-    private void showProductMenu(Product product) {
-        String favoriteText = product.isFavorite() ? "取消收藏" : "收藏";
-        String[] options = {favoriteText, "删除"};
+    private void submit(String keyword, List<ProductListItem> items) {
+        if (isFinishing() || isDestroyed()) {
+            return;
+        }
+        currentItems = items;
+        if (keyword.isEmpty()) {
+            totalProductCount = items.size();
+        }
+
+        adapter.setItems(items);
+        updateEmptyView(items);
+        updateSideIndexBar();
+        updateProductCountDisplay(keyword, items.size());
+        syncIndexHighlight();
+    }
+
+    // ================= 交互 =================
+
+    private void showProductMenu(ProductListItem product) {
+        String favoriteText = product.isFavorite ? "取消收藏" : "收藏";
+        String[] options = {favoriteText, getString(R.string.delete)};
 
         new AlertDialog.Builder(this)
-                .setTitle(product.getName())
+                .setTitle(product.name)
                 .setItems(options, (dialog, which) -> {
-                    switch (which) {
-                        case 0:
-                            toggleFavorite(product);
-                            break;
-                        case 1:
-                            showDeleteConfirmDialog(product);
-                            break;
+                    if (which == 0) {
+                        toggleFavorite(product);
+                    } else {
+                        showDeleteConfirmDialog(product);
                     }
                 })
                 .show();
     }
 
-    /**
-     * 显示删除确认对话框
-     */
-    private void showDeleteConfirmDialog(Product product) {
+    private void showDeleteConfirmDialog(ProductListItem product) {
         new AlertDialog.Builder(this)
-                .setTitle("删除产品")
-                .setMessage("确定要删除 \"" + product.getName() + "\" 吗？")
-                .setPositiveButton("删除", (dialog, which) -> deleteProduct(product))
-                .setNegativeButton("取消", null)
+                .setTitle(R.string.delete_title)
+                .setMessage(getString(R.string.delete_product_message, safeName(product)))
+                .setPositiveButton(R.string.delete, (dialog, which) -> deleteItem(product))
+                .setNegativeButton(R.string.cancel, null)
                 .show();
     }
 
-    /**
-     * 切换收藏状态
-     */
-    private void toggleFavorite(Product product) {
-        boolean newStatus = !product.isFavorite();
+    private void toggleFavorite(ProductListItem product) {
+        boolean newStatus = !product.isFavorite;
+        String name = safeName(product);
         executorService.execute(() -> {
-            database.productDao().updateFavorite(product.getId(), newStatus);
-
-            runOnUiThread(() -> {
-                // 显示提示
-                String message = newStatus ? "已收藏: " + product.getName() : "已取消收藏: " + product.getName();
+            database.productDao().updateFavorite(product.id, newStatus);
+            handler.post(() -> {
+                if (isFinishing() || isDestroyed()) {
+                    return;
+                }
+                String message = newStatus
+                        ? getString(R.string.favorite_added, name)
+                        : getString(R.string.favorite_removed, name);
                 Snackbar.make(fabAdd, message, Snackbar.LENGTH_SHORT).show();
-
-                // 重新加载产品列表
-                loadProducts();
+                loadItems(currentKeyword);
             });
         });
     }
 
-    private void deleteProduct(Product product) {
+    /**
+     * 删除产品，并在 Snackbar 消失前提供撤销。
+     *
+     * 图片文件延迟到 Snackbar 关闭时再删：用户点了撤销就还有图。
+     */
+    private void deleteItem(ProductListItem item) {
         executorService.execute(() -> {
-            database.productDao().delete(product);
-            runOnUiThread(() -> {
-                Snackbar.make(fabAdd, "已删除: " + product.getName(), Snackbar.LENGTH_SHORT).show();
-                loadProducts();
+            Product full = database.productDao().getProductById(item.id);
+            if (full == null) {
+                return;
+            }
+            database.productDao().delete(full);
+            handler.post(() -> {
+                if (isFinishing() || isDestroyed()) {
+                    ImageStore.deleteManaged(this, full.getPhotoPath());
+                    return;
+                }
+                loadItems(currentKeyword);
+
+                Snackbar snackbar = Snackbar.make(
+                        fabAdd, getString(R.string.product_deleted, safeName(item)), Snackbar.LENGTH_LONG);
+                snackbar.setAction(R.string.undo, v -> restoreProduct(full));
+                snackbar.addCallback(new Snackbar.Callback() {
+                    @Override
+                    public void onDismissed(Snackbar transientBottomBar, int event) {
+                        if (event != DISMISS_EVENT_ACTION) {
+                            ImageStore.deleteManaged(MainActivity.this, full.getPhotoPath());
+                        }
+                    }
+                });
+                snackbar.show();
             });
         });
     }
+
+    private void restoreProduct(Product product) {
+        executorService.execute(() -> {
+            database.productDao().insert(product);
+            handler.post(() -> {
+                if (!isFinishing() && !isDestroyed()) {
+                    loadItems(currentKeyword);
+                }
+            });
+        });
+    }
+
+    // ================= 视图状态 =================
 
     private void updateSideIndexBar() {
-        // 从adapter获取当前显示的字母列表
-        List<String> letters = adapter.getDisplayedLetters();
-        sideIndexBar.setLetters(letters);
-        sideIndexBar.setHasFavorites(hasFavorites);
+        sideIndexBar.setItems(adapter.getDisplayedLetters());
     }
 
-    private void searchProducts(String keyword) {
-        executorService.execute(() -> {
-            List<Product> products;
-            if (keyword.isEmpty()) {
-                products = database.productDao().getAllProducts();
-            } else {
-                products = database.productDao().searchProducts(keyword);
-            }
-
-            // 检查搜索结果中是否有收藏
-            boolean favoritesInResult = false;
-            for (Product p : products) {
-                if (p.isFavorite()) {
-                    favoritesInResult = true;
-                    break;
-                }
-            }
-
-            final int resultCount = products.size();
-            final boolean finalFavorites = favoritesInResult;
-            runOnUiThread(() -> {
-                currentProducts = products;
-                hasFavorites = finalFavorites;
-                adapter.setProducts(products);
-                updateEmptyView(products);
-                updateSideIndexBar();
-                updateProductCountDisplay(keyword, resultCount);
-            });
-        });
+    private void updateEmptyView(List<ProductListItem> items) {
+        boolean empty = items.isEmpty();
+        tvEmptyView.setVisibility(empty ? View.VISIBLE : View.GONE);
+        recyclerView.setVisibility(empty ? View.GONE : View.VISIBLE);
     }
 
-    private void updateEmptyView(List<Product> products) {
-        if (products.isEmpty()) {
-            tvEmptyView.setVisibility(View.VISIBLE);
-            recyclerView.setVisibility(View.GONE);
-        } else {
-            tvEmptyView.setVisibility(View.GONE);
-            recyclerView.setVisibility(View.VISIBLE);
-        }
-    }
-
-    /**
-     * 更新产品总数显示
-     */
-    private void updateProductCountDisplay() {
-        updateProductCountDisplay("", totalProductCount);
-    }
-
-    /**
-     * 更新产品总数显示（搜索时）
-     */
     private void updateProductCountDisplay(String keyword, int resultCount) {
         if (totalProductCount == 0) {
             tvProductCount.setVisibility(View.GONE);
             return;
         }
-
         tvProductCount.setVisibility(View.VISIBLE);
-        if (keyword.isEmpty()) {
-            tvProductCount.setText("共 " + totalProductCount + " 个产品");
-        } else {
-            tvProductCount.setText("搜索结果: " + resultCount + " / " + totalProductCount + " 个产品");
-        }
+        tvProductCount.setText(keyword.isEmpty()
+                ? getString(R.string.product_count, totalProductCount)
+                : getString(R.string.search_result_count, resultCount, totalProductCount));
     }
+
+    /**
+     * 滚动时把右侧索引高亮同步到当前分组（原来这里是空实现）
+     */
+    private void syncIndexHighlight() {
+        LinearLayoutManager layoutManager = (LinearLayoutManager) recyclerView.getLayoutManager();
+        if (layoutManager == null) {
+            return;
+        }
+        int firstVisible = layoutManager.findFirstVisibleItemPosition();
+        String letter = adapter.getLetterAtPosition(firstVisible);
+        if (letter == null || letter.equals(highlightedLetter)) {
+            return;
+        }
+        highlightedLetter = letter;
+        sideIndexBar.highlightLetter(letter);
+    }
+
+    private static String safeName(ProductListItem item) {
+        return item.name == null ? "" : item.name;
+    }
+
+    // ================= 索引回调 =================
 
     @Override
     public void onLetterSelected(String letter) {
@@ -357,63 +352,32 @@ public class MainActivity extends AppCompatActivity implements SideIndexBar.OnLe
     public void onStarSelected() {
         tvOverlay.setText("★");
         tvOverlay.setVisibility(View.VISIBLE);
-        scrollToStar();
+        scrollToLetter("★");
     }
 
     private void scrollToLetter(String letter) {
         int position = adapter.getLetterPosition(letter);
-        if (position >= 0) {
-            LinearLayoutManager layoutManager = (LinearLayoutManager) recyclerView.getLayoutManager();
-            if (layoutManager != null) {
-                layoutManager.scrollToPositionWithOffset(position, 0);
-            }
+        if (position < 0) {
+            return;
         }
-    }
-
-    private void scrollToStar() {
-        int position = adapter.getFavoritePosition();
-        if (position >= 0) {
-            LinearLayoutManager layoutManager = (LinearLayoutManager) recyclerView.getLayoutManager();
-            if (layoutManager != null) {
-                layoutManager.scrollToPositionWithOffset(position, 0);
-            }
-        }
-    }
-
-    private void updateSideIndexHighlight() {
         LinearLayoutManager layoutManager = (LinearLayoutManager) recyclerView.getLayoutManager();
-        if (layoutManager == null) return;
-
-        int firstVisiblePosition = layoutManager.findFirstVisibleItemPosition();
-        if (firstVisiblePosition >= 0) {
-            // 获取当前可见的第一个字母
-            List<String> letters = adapter.getDisplayedLetters();
-            String currentLetter = null;
-
-            // 从adapter的items中找到当前位置对应的字母
-            for (int i = firstVisiblePosition; i >= 0; i--) {
-                // 向上查找最近的字母头部
-            }
-
-            // 简化处理：从当前位置向下找最近的头部
-            for (int i = 0; i <= firstVisiblePosition && i < letters.size(); i++) {
-                // 这里需要根据实际位置计算
-            }
-
-            // 使用SideIndexBar的方法来更新
-            sideIndexBar.clearHighlight();
+        if (layoutManager != null) {
+            layoutManager.scrollToPositionWithOffset(position, 0);
         }
     }
+
+    // ================= 生命周期 =================
 
     @Override
     protected void onResume() {
         super.onResume();
-        loadProducts();
+        loadItems(currentKeyword);
     }
 
     @Override
     protected void onDestroy() {
         super.onDestroy();
+        handler.removeCallbacksAndMessages(null);
         executorService.shutdown();
     }
 }

@@ -1,62 +1,56 @@
 package com.productmanager;
 
+import android.text.TextUtils;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ImageView;
-import android.widget.LinearLayout;
 import android.widget.TextView;
 
 import androidx.annotation.NonNull;
+import androidx.recyclerview.widget.DiffUtil;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.bumptech.glide.Glide;
 
 import java.io.File;
 import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * 产品列表适配器
- * 显示产品信息，支持收藏区域和字母区域
+ *
+ * 结构：收藏区域（可选）→ A-Z 字母分组 → "#" 分组（中文/数字/符号，排在最后）
+ *
+ * 相比旧实现的三点改进：
+ * 1. 分组头使用独立布局，不再为头部 inflate 整套产品视图
+ * 2. 数据变化走 DiffUtil，只重绑真正变化的行，保留动画与滚动位置
+ * 3. 索引缓存（字母列表 / 字母位置 / 每行所属字母）在数据变化时算一次，
+ *    滚动过程中零分配
  */
-public class ProductAdapter extends RecyclerView.Adapter<ProductAdapter.ProductViewHolder> {
+public class ProductAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
 
-    // 列表项类型
     private static final int TYPE_FAVORITE_HEADER = 0;
     private static final int TYPE_LETTER_HEADER = 1;
     private static final int TYPE_PRODUCT = 2;
 
-    // 列表项包装类
-    private static class ListItem {
-        final int type;
-        final String letter;      // 字母头部的字母
-        final Product product;    // 产品
-        final boolean isFavoriteSection; // 是否是收藏区域的产品
-
-        ListItem(int type, String letter) {
-            this.type = type;
-            this.letter = letter;
-            this.product = null;
-            this.isFavoriteSection = false;
-        }
-
-        ListItem(Product product, boolean isFavoriteSection) {
-            this.type = TYPE_PRODUCT;
-            this.product = product;
-            this.letter = null;
-            this.isFavoriteSection = isFavoriteSection;
-        }
-    }
-
     private List<ListItem> items = new ArrayList<>();
+
+    /** 每行所属的字母分组，用于滚动时高亮右侧索引 */
+    private String[] letterOfRow = new String[0];
+    /** 当前显示的分组（★ + 字母），供 SideIndexBar 使用 */
+    private List<String> displayedLetters = new ArrayList<>();
+    /** 字母 → 行号 */
+    private final Map<String, Integer> letterPositions = new HashMap<>();
+
     private OnProductClickListener listener;
 
     public interface OnProductClickListener {
-        void onProductClick(Product product);
-        void onProductLongClick(Product product, int position);
+        void onProductClick(ProductListItem product);
+
+        void onProductLongClick(ProductListItem product);
     }
 
     public void setOnProductClickListener(OnProductClickListener listener) {
@@ -64,55 +58,16 @@ public class ProductAdapter extends RecyclerView.Adapter<ProductAdapter.ProductV
     }
 
     /**
-     * 设置产品列表，自动处理收藏区域和字母区域
+     * 提交新数据。传入顺序不限，内部会统一排序。
      */
-    public void setProducts(List<Product> products) {
-        items.clear();
+    public void setItems(List<ProductListItem> products) {
+        List<ListItem> next = buildItems(products);
+        DiffUtil.DiffResult diff = DiffUtil.calculateDiff(new ItemDiffCallback(items, next));
 
-        if (products == null || products.isEmpty()) {
-            notifyDataSetChanged();
-            return;
-        }
+        items = next;
+        rebuildCaches();
 
-        // 分离收藏产品和普通产品
-        List<Product> favoriteProducts = new ArrayList<>();
-        List<Product> allProducts = new ArrayList<>();
-
-        for (Product p : products) {
-            if (p.isFavorite()) {
-                favoriteProducts.add(p);
-            }
-            allProducts.add(p);
-        }
-
-        // 按字母排序收藏产品
-        Collections.sort(favoriteProducts, Comparator.comparing(p -> p.getName() != null ? p.getName().toLowerCase() : ""));
-
-        // 按字母排序所有产品
-        Collections.sort(allProducts, Comparator.comparing(p -> p.getName() != null ? p.getName().toLowerCase() : ""));
-
-        // 1. 添加收藏区域（如果有收藏产品）
-        if (!favoriteProducts.isEmpty()) {
-            // 收藏区域头部
-            items.add(new ListItem(TYPE_FAVORITE_HEADER, "★"));
-            // 收藏区域产品
-            for (Product p : favoriteProducts) {
-                items.add(new ListItem(p, true));
-            }
-        }
-
-        // 2. 添加字母区域
-        String currentLetter = null;
-        for (Product p : allProducts) {
-            String letter = p.getFirstLetter();
-            if (currentLetter == null || !currentLetter.equals(letter)) {
-                currentLetter = letter;
-                items.add(new ListItem(TYPE_LETTER_HEADER, letter));
-            }
-            items.add(new ListItem(p, false));
-        }
-
-        notifyDataSetChanged();
+        diff.dispatchUpdatesTo(this);
     }
 
     @Override
@@ -120,98 +75,234 @@ public class ProductAdapter extends RecyclerView.Adapter<ProductAdapter.ProductV
         return items.get(position).type;
     }
 
-    @NonNull
-    @Override
-    public ProductViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
-        View view = LayoutInflater.from(parent.getContext())
-                .inflate(R.layout.item_product, parent, false);
-        return new ProductViewHolder(view);
-    }
-
-    @Override
-    public void onBindViewHolder(@NonNull ProductViewHolder holder, int position) {
-        ListItem item = items.get(position);
-
-        switch (item.type) {
-            case TYPE_FAVORITE_HEADER:
-                holder.bindFavoriteHeader();
-                break;
-            case TYPE_LETTER_HEADER:
-                holder.bindLetterHeader(item.letter);
-                break;
-            case TYPE_PRODUCT:
-                holder.bindProduct(item.product, item.isFavoriteSection);
-                break;
-        }
-    }
-
     @Override
     public int getItemCount() {
         return items.size();
     }
 
-    /**
-     * 获取指定字母在列表中的位置
-     */
-    public int getLetterPosition(String letter) {
+    @NonNull
+    @Override
+    public RecyclerView.ViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
+        LayoutInflater inflater = LayoutInflater.from(parent.getContext());
+        if (viewType == TYPE_PRODUCT) {
+            return new ProductViewHolder(inflater.inflate(R.layout.item_product, parent, false));
+        }
+        return new HeaderViewHolder(inflater.inflate(R.layout.item_letter_header, parent, false));
+    }
+
+    @Override
+    public void onBindViewHolder(@NonNull RecyclerView.ViewHolder holder, int position) {
+        ListItem item = items.get(position);
+        if (holder instanceof ProductViewHolder) {
+            ((ProductViewHolder) holder).bind(item.product);
+        } else {
+            ((HeaderViewHolder) holder).bind(item);
+        }
+    }
+
+    // ================= 数据构建 =================
+
+    private static List<ListItem> buildItems(List<ProductListItem> source) {
+        List<ListItem> out = new ArrayList<>();
+        if (source == null || source.isEmpty()) {
+            return out;
+        }
+
+        List<ProductListItem> sorted = ProductListItem.sortedCopy(source);
+
+        // 1. 收藏区域
+        List<ProductListItem> favorites = new ArrayList<>();
+        for (ProductListItem product : sorted) {
+            if (product.isFavorite) {
+                favorites.add(product);
+            }
+        }
+        if (!favorites.isEmpty()) {
+            out.add(ListItem.favoriteHeader());
+            for (ProductListItem product : favorites) {
+                out.add(ListItem.product(product, true));
+            }
+        }
+
+        // 2. 字母分组（sorted 已按 字母 → 名称 排好，"#" 在最后）
+        String currentLetter = null;
+        for (ProductListItem product : sorted) {
+            String letter = product.getFirstLetter();
+            if (!letter.equals(currentLetter)) {
+                currentLetter = letter;
+                out.add(ListItem.letterHeader(letter));
+            }
+            out.add(ListItem.product(product, false));
+        }
+        return out;
+    }
+
+    private void rebuildCaches() {
+        displayedLetters = new ArrayList<>();
+        letterPositions.clear();
+        letterOfRow = new String[items.size()];
+
+        String current = null;
         for (int i = 0; i < items.size(); i++) {
             ListItem item = items.get(i);
-            if (item.type == TYPE_LETTER_HEADER && item.letter != null && item.letter.equalsIgnoreCase(letter)) {
-                return i;
-            }
-        }
-        return -1;
-    }
-
-    /**
-     * 获取收藏区域的起始位置
-     */
-    public int getFavoritePosition() {
-        for (int i = 0; i < items.size(); i++) {
-            if (items.get(i).type == TYPE_FAVORITE_HEADER) {
-                return i;
-            }
-        }
-        return -1;
-    }
-
-    /**
-     * 获取当前显示的字母列表（包含★如果有收藏）
-     */
-    public List<String> getDisplayedLetters() {
-        List<String> letters = new ArrayList<>();
-        for (ListItem item : items) {
             if (item.type == TYPE_FAVORITE_HEADER) {
-                letters.add("★");
+                current = "★";
+                displayedLetters.add(current);
+                letterPositions.put(current, i);
             } else if (item.type == TYPE_LETTER_HEADER) {
-                letters.add(item.letter);
+                current = item.letter;
+                displayedLetters.add(current);
+                letterPositions.put(current, i);
             }
+            letterOfRow[i] = current;
         }
-        return letters;
     }
 
-    class ProductViewHolder extends RecyclerView.ViewHolder {
+    // ================= 供 Activity 查询 =================
 
-        private LinearLayout llLetterHeader;
-        private ImageView ivHeaderStar;
-        private TextView tvLetterHeader;
-        private LinearLayout llProductContent;
-        private View viewDivider;
-        private ImageView ivPhoto;
-        private TextView tvName;
-        private TextView tvSpecification;
-        private TextView tvSize;
-        private TextView tvMaterial;
-        private TextView tvRemark;
-        private TextView tvPrice;
+    /**
+     * 指定字母分组所在行号，没有该分组返回 -1
+     */
+    public int getLetterPosition(String letter) {
+        Integer position = letterPositions.get(letter);
+        return position == null ? -1 : position;
+    }
 
-        public ProductViewHolder(@NonNull View itemView) {
+    public int getFavoritePosition() {
+        return getLetterPosition("★");
+    }
+
+    /**
+     * 指定行属于哪个字母分组（滚动高亮用）
+     */
+    public String getLetterAtPosition(int position) {
+        if (position < 0 || position >= letterOfRow.length) {
+            return null;
+        }
+        return letterOfRow[position];
+    }
+
+    public List<String> getDisplayedLetters() {
+        return new ArrayList<>(displayedLetters);
+    }
+
+    // ================= 条目包装 =================
+
+    private static class ListItem {
+        final int type;
+        final String letter;
+        final ProductListItem product;
+        final boolean favoriteSection;
+
+        private ListItem(int type, String letter, ProductListItem product, boolean favoriteSection) {
+            this.type = type;
+            this.letter = letter;
+            this.product = product;
+            this.favoriteSection = favoriteSection;
+        }
+
+        static ListItem favoriteHeader() {
+            return new ListItem(TYPE_FAVORITE_HEADER, "★", null, false);
+        }
+
+        static ListItem letterHeader(String letter) {
+            return new ListItem(TYPE_LETTER_HEADER, letter, null, false);
+        }
+
+        static ListItem product(ProductListItem product, boolean favoriteSection) {
+            return new ListItem(TYPE_PRODUCT, null, product, favoriteSection);
+        }
+    }
+
+    private static boolean sameContent(ProductListItem a, ProductListItem b) {
+        return a.id == b.id
+                && a.isFavorite == b.isFavorite
+                && Double.compare(a.price, b.price) == 0
+                && TextUtils.equals(a.name, b.name)
+                && TextUtils.equals(a.specification, b.specification)
+                && TextUtils.equals(a.size, b.size)
+                && TextUtils.equals(a.material, b.material)
+                && TextUtils.equals(a.remark, b.remark)
+                && TextUtils.equals(a.photoPath, b.photoPath);
+    }
+
+    private static class ItemDiffCallback extends DiffUtil.Callback {
+
+        private final List<ListItem> oldItems;
+        private final List<ListItem> newItems;
+
+        ItemDiffCallback(List<ListItem> oldItems, List<ListItem> newItems) {
+            this.oldItems = oldItems;
+            this.newItems = newItems;
+        }
+
+        @Override
+        public int getOldListSize() {
+            return oldItems.size();
+        }
+
+        @Override
+        public int getNewListSize() {
+            return newItems.size();
+        }
+
+        @Override
+        public boolean areItemsTheSame(int oldPos, int newPos) {
+            ListItem oldItem = oldItems.get(oldPos);
+            ListItem newItem = newItems.get(newPos);
+            if (oldItem.type != newItem.type) {
+                return false;
+            }
+            if (oldItem.type == TYPE_PRODUCT) {
+                return oldItem.product.id == newItem.product.id;
+            }
+            return TextUtils.equals(oldItem.letter, newItem.letter);
+        }
+
+        @Override
+        public boolean areContentsTheSame(int oldPos, int newPos) {
+            ListItem oldItem = oldItems.get(oldPos);
+            ListItem newItem = newItems.get(newPos);
+            if (oldItem.type == TYPE_PRODUCT) {
+                return sameContent(oldItem.product, newItem.product);
+            }
+            // 分组头内容由字母决定，字母相同即内容相同
+            return true;
+        }
+    }
+
+    // ================= ViewHolder =================
+
+    private class HeaderViewHolder extends RecyclerView.ViewHolder {
+
+        private final ImageView ivStar;
+        private final TextView tvLetter;
+
+        HeaderViewHolder(@NonNull View itemView) {
             super(itemView);
-            llLetterHeader = itemView.findViewById(R.id.ll_letter_header);
-            ivHeaderStar = itemView.findViewById(R.id.iv_header_star);
-            tvLetterHeader = itemView.findViewById(R.id.tv_letter_header);
-            llProductContent = itemView.findViewById(R.id.ll_product_content);
-            viewDivider = itemView.findViewById(R.id.view_divider);
+            ivStar = itemView.findViewById(R.id.iv_header_star);
+            tvLetter = itemView.findViewById(R.id.tv_letter_header);
+        }
+
+        void bind(ListItem item) {
+            boolean isFavoriteHeader = item.type == TYPE_FAVORITE_HEADER;
+            ivStar.setVisibility(isFavoriteHeader ? View.VISIBLE : View.GONE);
+            tvLetter.setText(isFavoriteHeader ? "" : item.letter);
+        }
+    }
+
+    private class ProductViewHolder extends RecyclerView.ViewHolder {
+
+        private final ImageView ivPhoto;
+        private final TextView tvName;
+        private final TextView tvSpecification;
+        private final TextView tvSize;
+        private final TextView tvMaterial;
+        private final TextView tvRemark;
+        private final TextView tvPrice;
+
+        ProductViewHolder(@NonNull View itemView) {
+            super(itemView);
             ivPhoto = itemView.findViewById(R.id.iv_photo);
             tvName = itemView.findViewById(R.id.tv_name);
             tvSpecification = itemView.findViewById(R.id.tv_specification);
@@ -220,116 +311,61 @@ public class ProductAdapter extends RecyclerView.Adapter<ProductAdapter.ProductV
             tvRemark = itemView.findViewById(R.id.tv_remark);
             tvPrice = itemView.findViewById(R.id.tv_price);
 
-            // 产品点击事件
             itemView.setOnClickListener(v -> {
-                int pos = getAdapterPosition();
-                if (pos != RecyclerView.NO_POSITION && listener != null) {
-                    ListItem item = items.get(pos);
-                    if (item.type == TYPE_PRODUCT && item.product != null) {
-                        listener.onProductClick(item.product);
-                    }
+                int position = getBindingAdapterPosition();
+                if (position == RecyclerView.NO_POSITION || listener == null) {
+                    return;
+                }
+                ListItem item = items.get(position);
+                if (item.type == TYPE_PRODUCT && item.product != null) {
+                    listener.onProductClick(item.product);
                 }
             });
 
-            // 产品长按事件
             itemView.setOnLongClickListener(v -> {
-                int pos = getAdapterPosition();
-                if (pos != RecyclerView.NO_POSITION && listener != null) {
-                    ListItem item = items.get(pos);
-                    if (item.type == TYPE_PRODUCT && item.product != null) {
-                        listener.onProductLongClick(item.product, pos);
-                    }
+                int position = getBindingAdapterPosition();
+                if (position == RecyclerView.NO_POSITION || listener == null) {
+                    return false;
+                }
+                ListItem item = items.get(position);
+                if (item.type == TYPE_PRODUCT && item.product != null) {
+                    listener.onProductLongClick(item.product);
                 }
                 return true;
             });
         }
 
-        void bindFavoriteHeader() {
-            // 显示字母头部
-            llLetterHeader.setVisibility(View.VISIBLE);
-            ivHeaderStar.setVisibility(View.VISIBLE);
-            tvLetterHeader.setText("");
-            // 隐藏产品内容区域和分隔线
-            llProductContent.setVisibility(View.GONE);
-            viewDivider.setVisibility(View.GONE);
-        }
+        void bind(ProductListItem product) {
+            tvName.setText(product.name == null ? "" : product.name);
 
-        void bindLetterHeader(String letter) {
-            // 显示字母头部
-            llLetterHeader.setVisibility(View.VISIBLE);
-            ivHeaderStar.setVisibility(View.GONE);
-            tvLetterHeader.setText(letter);
-            // 隐藏产品内容区域和分隔线
-            llProductContent.setVisibility(View.GONE);
-            viewDivider.setVisibility(View.GONE);
-        }
+            bindOptional(tvSpecification, R.string.specification, product.specification);
+            bindOptional(tvSize, R.string.size, product.size);
+            bindOptional(tvMaterial, R.string.material, product.material);
+            bindOptional(tvRemark, R.string.remark, product.remark);
 
-        void bindProduct(Product product, boolean isFavoriteSection) {
-            // 隐藏字母头部
-            llLetterHeader.setVisibility(View.GONE);
-            // 显示产品内容区域和分隔线
-            llProductContent.setVisibility(View.VISIBLE);
-            viewDivider.setVisibility(View.VISIBLE);
-
-            // 设置产品名称
-            String name = product.getName();
-            tvName.setText(name != null ? name : "");
-
-            // 设置规格
-            String specification = product.getSpecification();
-            if (specification != null && !specification.isEmpty()) {
-                tvSpecification.setText("规格: " + specification);
-                tvSpecification.setVisibility(View.VISIBLE);
-            } else {
-                tvSpecification.setVisibility(View.GONE);
-            }
-
-            // 设置尺寸
-            String size = product.getSize();
-            if (size != null && !size.isEmpty()) {
-                tvSize.setText("尺寸: " + size);
-                tvSize.setVisibility(View.VISIBLE);
-            } else {
-                tvSize.setVisibility(View.GONE);
-            }
-
-            // 设置材质
-            String material = product.getMaterial();
-            if (material != null && !material.isEmpty()) {
-                tvMaterial.setText("材质: " + material);
-                tvMaterial.setVisibility(View.VISIBLE);
-            } else {
-                tvMaterial.setVisibility(View.GONE);
-            }
-
-            // 设置备注
-            String remark = product.getRemark();
-            if (remark != null && !remark.isEmpty()) {
-                tvRemark.setText("备注: " + remark);
-                tvRemark.setVisibility(View.VISIBLE);
-            } else {
-                tvRemark.setVisibility(View.GONE);
-            }
-
-            // 设置价格
             tvPrice.setText(product.getFormattedPrice());
 
-            // 设置产品照片
-            String photoPath = product.getPhotoPath();
-            if (photoPath != null && !photoPath.isEmpty()) {
-                File photoFile = new File(photoPath);
-                if (photoFile.exists()) {
-                    Glide.with(itemView.getContext())
-                            .load(photoFile)
-                            .placeholder(R.drawable.ic_product)
-                            .error(R.drawable.ic_product)
-                            .centerCrop()
-                            .into(ivPhoto);
-                } else {
-                    ivPhoto.setImageResource(R.drawable.ic_product);
-                }
+            String photoPath = product.photoPath;
+            if (photoPath != null && !photoPath.isEmpty() && new File(photoPath).exists()) {
+                Glide.with(ivPhoto)
+                        .load(new File(photoPath))
+                        .placeholder(R.drawable.ic_product)
+                        .error(R.drawable.ic_product)
+                        .centerCrop()
+                        .into(ivPhoto);
             } else {
+                Glide.with(ivPhoto).clear(ivPhoto);
                 ivPhoto.setImageResource(R.drawable.ic_product);
+            }
+        }
+
+        private void bindOptional(TextView target, int labelRes, String value) {
+            if (value != null && !value.isEmpty()) {
+                target.setText(target.getContext().getString(
+                        R.string.field_with_value, target.getContext().getString(labelRes), value));
+                target.setVisibility(View.VISIBLE);
+            } else {
+                target.setVisibility(View.GONE);
             }
         }
     }

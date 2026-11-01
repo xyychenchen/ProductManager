@@ -140,22 +140,32 @@ public class Product {
 
     /**
      * 获取首字母（用于字母索引）
+     *
+     * 只有 ASCII 字母才作为索引项；中文、数字、符号、emoji 一律归到 "#"。
+     * 之前用 Character.isLetter 判断，'苹' 这类汉字会被当成字母，
+     * 导致索引栏里出现汉字，A-Z 索引失效。
      */
     public String getFirstLetter() {
         if (name == null || name.isEmpty()) {
             return "#";
         }
-        char firstChar = name.charAt(0);
-        if (Character.isLetter(firstChar)) {
-            return String.valueOf(Character.toUpperCase(firstChar));
+        int codePoint = name.codePointAt(0);
+        if (codePoint >= 'a' && codePoint <= 'z') {
+            return String.valueOf((char) (codePoint - ('a' - 'A')));
+        }
+        if (codePoint >= 'A' && codePoint <= 'Z') {
+            return String.valueOf((char) codePoint);
         }
         return "#";
     }
 
     /**
      * 格式化价格显示
+     *
+     * 固定用 US Locale：价格本身以美元存储，默认 Locale 会在部分区域
+     * 输出 "$99,99" 这类错误分隔符。
      */
     public String getFormattedPrice() {
-        return String.format("$%.2f", price);
+        return String.format(java.util.Locale.US, "$%.2f", price);
     }
 }

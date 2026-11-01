@@ -14,46 +14,61 @@ import java.util.List;
  */
 @Dao
 public interface ProductDao {
-    
+
+    // 列表页需要的字段（不含 script 大文本）
+    String LIST_COLUMNS = "id, name, specification, size, material, remark, price, photoPath, isFavorite";
+
     @Insert
     long insert(Product product);
-    
+
     @Update
     void update(Product product);
-    
+
     @Delete
     void delete(Product product);
-    
-    @Query("SELECT * FROM products ORDER BY isFavorite DESC, name COLLATE NOCASE ASC")
+
+    /**
+     * 完整实体查询：仅在需要全部字段（导出、编辑回填）时使用
+     */
+    @Query("SELECT * FROM products ORDER BY name COLLATE NOCASE ASC")
     List<Product> getAllProducts();
-    
+
     @Query("SELECT * FROM products WHERE id = :id")
     Product getProductById(int id);
-    
-    @Query("SELECT * FROM products WHERE " +
-           "name LIKE '%' || :keyword || '%' OR " +
-           "specification LIKE '%' || :keyword || '%' OR " +
-           "size LIKE '%' || :keyword || '%' OR " +
-           "material LIKE '%' || :keyword || '%' OR " +
-           "remark LIKE '%' || :keyword || '%' " +
-           "ORDER BY isFavorite DESC, name COLLATE NOCASE ASC")
-    List<Product> searchProducts(String keyword);
-    
-    @Query("SELECT * FROM products WHERE name LIKE :letter || '%' ORDER BY name COLLATE NOCASE ASC")
-    List<Product> getProductsByFirstLetter(String letter);
-    
-    @Query("SELECT DISTINCT UPPER(SUBSTR(name, 1, 1)) as letter FROM products WHERE name IS NOT NULL AND name != '' ORDER BY letter")
-    List<String> getUsedLetters();
-    
-    @Query("DELETE FROM products WHERE id = :id")
-    void deleteById(int id);
+
+    /**
+     * 列表查询：只取展示所需字段，避免把话术等大文本读进内存
+     */
+    @Query("SELECT " + LIST_COLUMNS + " FROM products ORDER BY name COLLATE NOCASE ASC")
+    List<ProductListItem> getAllItems();
+
+    /**
+     * 搜索：名称/规格/尺寸/材质/备注/话术
+     *
+     * 调用方需先用 {@link #toLikePattern(String)} 生成 pattern。
+     */
+    @Query("SELECT " + LIST_COLUMNS + " FROM products WHERE "
+            + "name LIKE :pattern ESCAPE '\\' OR "
+            + "specification LIKE :pattern ESCAPE '\\' OR "
+            + "size LIKE :pattern ESCAPE '\\' OR "
+            + "material LIKE :pattern ESCAPE '\\' OR "
+            + "remark LIKE :pattern ESCAPE '\\' OR "
+            + "script LIKE :pattern ESCAPE '\\'")
+    List<ProductListItem> searchItems(String pattern);
 
     @Query("UPDATE products SET isFavorite = :isFavorite WHERE id = :id")
     void updateFavorite(int id, boolean isFavorite);
 
-    @Query("SELECT * FROM products WHERE isFavorite = 1 ORDER BY name COLLATE NOCASE ASC")
-    List<Product> getFavoriteProducts();
-
-    @Query("SELECT COUNT(*) FROM products WHERE isFavorite = 1")
-    int getFavoriteCount();
+    /**
+     * 把用户输入转成 LIKE 模式，转义通配符。
+     *
+     * 不做转义时，用户输入一个 "%" 就会匹配全部数据。
+     */
+    static String toLikePattern(String keyword) {
+        String escaped = keyword
+                .replace("\\", "\\\\")
+                .replace("%", "\\%")
+                .replace("_", "\\_");
+        return "%" + escaped + "%";
+    }
 }

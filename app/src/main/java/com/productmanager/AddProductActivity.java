@@ -1,52 +1,57 @@
 package com.productmanager;
 
-import android.Manifest;
-import android.app.AlertDialog;
 import android.content.Intent;
-import android.content.pm.PackageManager;
-import android.graphics.Bitmap;
-import android.graphics.BitmapFactory;
 import android.net.Uri;
-import android.os.Build;
 import android.os.Bundle;
-import android.os.VibrationEffect;
-import android.os.Vibrator;
-import android.provider.MediaStore;
 import android.text.TextUtils;
+import android.view.HapticFeedbackConstants;
+import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.ImageView;
 import android.widget.TextView;
 import android.widget.Toast;
 
-import androidx.annotation.NonNull;
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.Nullable;
+import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
-import androidx.core.app.ActivityCompat;
-import androidx.core.content.ContextCompat;
 import androidx.core.content.FileProvider;
 
 import com.bumptech.glide.Glide;
 import com.google.android.material.appbar.MaterialToolbar;
 
 import java.io.File;
-import java.io.FileOutputStream;
-import java.io.InputStream;
-import java.text.SimpleDateFormat;
-import java.util.Date;
+import java.io.IOException;
 import java.util.Locale;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 /**
  * 添加/编辑产品界面
+ *
+ * 图片处理约定：
+ * - 相册与相机的结果都经过 {@link ImageStore} 压缩成统一尺寸后落盘，不再保存原图
+ * - 相机使用 cache 目录中的临时文件，压缩完成后立刻删除
+ * - 编辑时替换图片，旧文件在保存成功后才删除（用户中途放弃不会丢图）
  */
 public class AddProductActivity extends AppCompatActivity {
 
-    private static final int REQUEST_STORAGE_PERMISSION = 100;
-    private static final int REQUEST_CAMERA_PERMISSION = 101;
-    private static final int REQUEST_PICK_IMAGE = 102;
-    private static final int REQUEST_TAKE_PHOTO = 103;
+    public static final String EXTRA_PRODUCT_ID = "product_id";
+
+    private static final String STATE_NAME = "state_name";
+    private static final String STATE_SPECIFICATION = "state_specification";
+    private static final String STATE_SIZE = "state_size";
+    private static final String STATE_MATERIAL = "state_material";
+    private static final String STATE_PRICE = "state_price";
+    private static final String STATE_REMARK = "state_remark";
+    private static final String STATE_SCRIPT = "state_script";
+    private static final String STATE_PHOTO_PATH = "state_photo_path";
+    private static final String STATE_ORIGINAL_PHOTO = "state_original_photo";
+    private static final String STATE_CAMERA_TEMP = "state_camera_temp";
+
+    private static final String FILE_PROVIDER_AUTHORITY = "com.productmanager.fileprovider";
 
     private MaterialToolbar toolbar;
     private ImageView ivPhoto;
@@ -63,40 +68,42 @@ public class AddProductActivity extends AppCompatActivity {
     private ProductDatabase database;
     private ExecutorService executorService;
 
-    private int productId = -1;  // -1表示新增，其他表示编辑
+    private int productId = -1;
     private Product currentProduct;
+    /** 当前展示/待保存的图片 */
     private String currentPhotoPath;
-    private String cameraPhotoPath;  // 相机拍照的实际文件路径
+    /** 进入页面时的原始图片，保存成功且被替换后才删除 */
+    private String originalPhotoPath;
+    /** 相机临时文件，压缩或放弃后清理 */
+    private String cameraTempPath;
+    private boolean photoProcessing;
+    /** 本次编辑是否已成功保存，用于判断退出时是否需要清理新选的图片 */
+    private boolean saved;
+
+    private ActivityResultLauncher<Intent> pickImageLauncher;
+    private ActivityResultLauncher<Uri> takePictureLauncher;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_add_product);
 
-        // 初始化数据库
         database = ProductDatabase.getDatabase(this);
         executorService = Executors.newSingleThreadExecutor();
 
-        // 获取传入的产品ID
-        productId = getIntent().getIntExtra("product_id", -1);
+        productId = getIntent().getIntExtra(EXTRA_PRODUCT_ID, -1);
 
-        // 初始化视图
         initViews();
-
-        // 设置工具栏
+        registerLaunchers();
         setupToolbar();
-
-        // 设置照片点击
         setupPhotoPicker();
-
-        // 设置Markdown预览按钮
         setupMarkdownPreviewButton();
-
-        // 设置保存按钮
         setupSaveButton();
 
-        // 加载产品数据（编辑模式）
-        if (productId != -1) {
+        if (savedInstanceState != null) {
+            // 屏幕旋转 / 进程恢复：优先恢复用户输入，避免被数据库中的旧值覆盖
+            restoreState(savedInstanceState);
+        } else if (productId != -1) {
             loadProduct();
         }
     }
@@ -115,11 +122,31 @@ public class AddProductActivity extends AppCompatActivity {
         tvFullscreenEdit = findViewById(R.id.tv_fullscreen_edit);
     }
 
+    private void registerLaunchers() {
+        pickImageLauncher = registerForActivityResult(
+                new ActivityResultContracts.StartActivityForResult(),
+                result -> {
+                    if (result.getResultCode() == RESULT_OK && result.getData() != null) {
+                        importPickedImage(result.getData().getData());
+                    }
+                });
+
+        takePictureLauncher = registerForActivityResult(
+                new ActivityResultContracts.TakePicture(),
+                success -> {
+                    if (success) {
+                        importCameraPhoto();
+                    } else {
+                        discardCameraTemp();
+                    }
+                });
+    }
+
     private void setupToolbar() {
         setSupportActionBar(toolbar);
         if (getSupportActionBar() != null) {
             getSupportActionBar().setDisplayHomeAsUpEnabled(true);
-            getSupportActionBar().setTitle(productId == -1 ? "添加产品" : "编辑产品");
+            getSupportActionBar().setTitle(productId == -1 ? R.string.add_product : R.string.edit_product);
         }
         toolbar.setNavigationOnClickListener(v -> finish());
     }
@@ -130,318 +157,180 @@ public class AddProductActivity extends AppCompatActivity {
 
     private void setupMarkdownPreviewButton() {
         tvFullscreenEdit.setOnClickListener(v -> {
-            String script = etScript.getText().toString();
-            String productName = etName.getText().toString();
-
             Intent intent = new Intent(this, ScriptViewerActivity.class);
-            intent.putExtra(ScriptViewerActivity.EXTRA_PRODUCT_NAME, productName);
-            intent.putExtra(ScriptViewerActivity.EXTRA_SCRIPT, script);
+            // 传 id 而不是整段文本，避免长话术触发 Binder 事务上限
+            intent.putExtra(ScriptViewerActivity.EXTRA_PRODUCT_ID, productId);
+            intent.putExtra(ScriptViewerActivity.EXTRA_PRODUCT_NAME, etName.getText().toString());
+            intent.putExtra(ScriptViewerActivity.EXTRA_SCRIPT_DRAFT, etScript.getText().toString());
             startActivity(intent);
         });
     }
 
-    /**
-     * 显示选择照片方式对话框
-     */
+    private void setupSaveButton() {
+        btnSave.setOnClickListener(v -> {
+            v.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY);
+            saveProduct();
+        });
+    }
+
+    // ================= 图片 =================
+
     private void showPhotoChooseDialog() {
-        String[] options = {"拍照", "从相册选择"};
+        if (photoProcessing) {
+            return;
+        }
+        String[] options = {
+                getString(R.string.photo_pick_camera),
+                getString(R.string.photo_pick_gallery)
+        };
         new AlertDialog.Builder(this)
-                .setTitle("选择照片")
+                .setTitle(R.string.photo_pick_title)
                 .setItems(options, (dialog, which) -> {
                     if (which == 0) {
-                        // 拍照
-                        checkAndTakePhoto();
+                        takePhoto();
                     } else {
-                        // 从相册选择
-                        checkAndPickImage();
+                        pickImage();
                     }
                 })
                 .show();
     }
 
-    private void setupSaveButton() {
-        btnSave.setOnClickListener(v -> {
-            // 触发震动反馈
-            performHapticFeedback();
-            saveProduct();
+    /**
+     * 相册走系统文件选择器（ACTION_GET_CONTENT），无需申请存储权限
+     */
+    private void pickImage() {
+        Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
+        intent.setType("image/*");
+        intent.addCategory(Intent.CATEGORY_OPENABLE);
+        try {
+            pickImageLauncher.launch(intent);
+        } catch (Exception e) {
+            toast(R.string.image_load_failed);
+        }
+    }
+
+    private void importPickedImage(@Nullable Uri uri) {
+        if (uri == null) {
+            return;
+        }
+        photoProcessing = true;
+        executorService.execute(() -> {
+            String stored = ImageStore.importImage(getApplicationContext(), uri);
+            runOnUiThread(() -> {
+                photoProcessing = false;
+                if (isFinishing() || isDestroyed()) {
+                    if (stored != null) {
+                        ImageStore.deleteManaged(this, stored);
+                    }
+                    return;
+                }
+                if (stored != null) {
+                    applyPhoto(stored);
+                } else {
+                    toast(R.string.image_load_failed);
+                }
+            });
         });
     }
 
-    /**
-     * 执行震动反馈
-     */
-    private void performHapticFeedback() {
-        Vibrator vibrator = (Vibrator) getSystemService(VIBRATOR_SERVICE);
-        if (vibrator != null && vibrator.hasVibrator()) {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                vibrator.vibrate(VibrationEffect.createOneShot(30, VibrationEffect.DEFAULT_AMPLITUDE));
-            } else {
-                vibrator.vibrate(30);
-            }
-        }
-    }
-
-    // ============ 权限检查和请求 ============
-
-    private boolean checkStoragePermission() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            return ContextCompat.checkSelfPermission(this, Manifest.permission.READ_MEDIA_IMAGES)
-                    == PackageManager.PERMISSION_GRANTED;
-        } else {
-            return ContextCompat.checkSelfPermission(this, Manifest.permission.READ_EXTERNAL_STORAGE)
-                    == PackageManager.PERMISSION_GRANTED;
-        }
-    }
-
-    private boolean checkCameraPermission() {
-        return ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA)
-                == PackageManager.PERMISSION_GRANTED;
-    }
-
-    /**
-     * 检查权限并从相册选择
-     */
-    private void checkAndPickImage() {
-        if (checkStoragePermission()) {
-            pickImage();
-        } else {
-            requestStoragePermission();
-        }
-    }
-
-    /**
-     * 检查权限并拍照
-     */
-    private void checkAndTakePhoto() {
-        if (checkCameraPermission()) {
-            takePhoto();
-        } else {
-            requestCameraPermission();
-        }
-    }
-
-    private void requestStoragePermission() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            ActivityCompat.requestPermissions(this,
-                    new String[]{Manifest.permission.READ_MEDIA_IMAGES}, REQUEST_STORAGE_PERMISSION);
-        } else {
-            ActivityCompat.requestPermissions(this,
-                    new String[]{Manifest.permission.READ_EXTERNAL_STORAGE}, REQUEST_STORAGE_PERMISSION);
-        }
-    }
-
-    private void requestCameraPermission() {
-        ActivityCompat.requestPermissions(this,
-                new String[]{Manifest.permission.CAMERA},
-                REQUEST_CAMERA_PERMISSION);
-    }
-
-    @Override
-    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-
-        if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-            // 权限获取成功，直接执行用户选择的操作
-            if (requestCode == REQUEST_STORAGE_PERMISSION) {
-                // 相册权限，直接打开相册
-                pickImage();
-            } else if (requestCode == REQUEST_CAMERA_PERMISSION) {
-                // 相机权限，直接打开相机
-                takePhoto();
-            }
-        } else {
-            Toast.makeText(this, "需要相应权限才能继续操作", Toast.LENGTH_SHORT).show();
-        }
-    }
-
-    // ============ 拍照功能 ============
-
     private void takePhoto() {
-        Intent takePictureIntent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
-        if (takePictureIntent.resolveActivity(getPackageManager()) != null) {
-            // 创建临时文件保存拍照结果
-            File photoFile = createImageFile();
-            if (photoFile != null) {
-                cameraPhotoPath = photoFile.getAbsolutePath();  // 保存实际文件路径
-
-                Uri photoUri = FileProvider.getUriForFile(this,
-                        "com.productmanager.fileprovider",
-                        photoFile);
-                takePictureIntent.putExtra(MediaStore.EXTRA_OUTPUT, photoUri);
-
-                // 给 Intent 添加读取权限
-                takePictureIntent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-
-                startActivityForResult(takePictureIntent, REQUEST_TAKE_PHOTO);
+        try {
+            File dir = new File(getCacheDir(), "camera");
+            if (!dir.exists() && !dir.mkdirs()) {
+                throw new IOException("无法创建临时目录");
             }
+            File temp = new File(dir, "camera_" + System.currentTimeMillis() + ".jpg");
+            cameraTempPath = temp.getAbsolutePath();
+            Uri uri = FileProvider.getUriForFile(this, FILE_PROVIDER_AUTHORITY, temp);
+            takePictureLauncher.launch(uri);
+        } catch (Exception e) {
+            discardCameraTemp();
+            toast(R.string.no_camera_app);
         }
     }
 
-    private File createImageFile() {
-        // 创建保存路径
-        File imagesDir = new File(getFilesDir(), "product_images");
-        if (!imagesDir.exists()) {
-            imagesDir.mkdirs();
-        }
-
-        // 生成文件名
-        String timeStamp = new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(new Date());
-        String fileName = "IMG_" + timeStamp + ".jpg";
-
-        return new File(imagesDir, fileName);
-    }
-
-    // ============ 从相册选择 ============
-
-    private void pickImage() {
-        Intent intent = new Intent(Intent.ACTION_PICK, MediaStore.Images.Media.EXTERNAL_CONTENT_URI);
-        intent.setType("image/*");
-        startActivityForResult(intent, REQUEST_PICK_IMAGE);
-    }
-
-    // ============ 处理结果 ============
-
-    @Override
-    protected void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
-        super.onActivityResult(requestCode, resultCode, data);
-
-        if (resultCode != RESULT_OK) {
+    private void importCameraPhoto() {
+        final String tempPath = cameraTempPath;
+        cameraTempPath = null;
+        if (tempPath == null) {
             return;
         }
-
-        switch (requestCode) {
-            case REQUEST_PICK_IMAGE:
-                // 从相册选择
-                if (data != null && data.getData() != null) {
-                    handlePickedImage(data.getData());
+        photoProcessing = true;
+        executorService.execute(() -> {
+            String stored = ImageStore.importCameraTempFile(getApplicationContext(), tempPath);
+            runOnUiThread(() -> {
+                photoProcessing = false;
+                if (isFinishing() || isDestroyed()) {
+                    if (stored != null) {
+                        ImageStore.deleteManaged(this, stored);
+                    }
+                    return;
                 }
-                break;
-
-            case REQUEST_TAKE_PHOTO:
-                // 拍照 - 直接使用保存的文件路径
-                if (cameraPhotoPath != null) {
-                    handleTakenPhoto();
+                if (stored != null) {
+                    applyPhoto(stored);
+                } else {
+                    toast(R.string.image_save_failed);
                 }
-                break;
+            });
+        });
+    }
+
+    private void applyPhoto(String path) {
+        // 旧的待保存图片直接清理（此时还没写入数据库）
+        if (currentPhotoPath != null && !currentPhotoPath.equals(originalPhotoPath)) {
+            ImageStore.deleteManaged(this, currentPhotoPath);
+        }
+        currentPhotoPath = path;
+        Glide.with(this)
+                .load(new File(path))
+                .centerCrop()
+                .into(ivPhoto);
+    }
+
+    private void discardCameraTemp() {
+        if (cameraTempPath != null) {
+            ImageStore.deleteQuietly(cameraTempPath);
+            cameraTempPath = null;
         }
     }
 
-    /**
-     * 处理从相册选择的图片
-     */
-    private void handlePickedImage(Uri imageUri) {
-        try {
-            InputStream inputStream = getContentResolver().openInputStream(imageUri);
-            Bitmap bitmap = BitmapFactory.decodeStream(inputStream);
-            if (inputStream != null) {
-                inputStream.close();
-            }
-
-            if (bitmap != null) {
-                // 保存图片到应用私有目录
-                currentPhotoPath = saveBitmapToFile(bitmap);
-
-                // 显示图片
-                if (currentPhotoPath != null) {
-                    Glide.with(this)
-                            .load(new File(currentPhotoPath))
-                            .centerCrop()
-                            .into(ivPhoto);
-                }
-            }
-        } catch (Exception e) {
-            e.printStackTrace();
-            Toast.makeText(this, "图片加载失败", Toast.LENGTH_SHORT).show();
-        }
-    }
-
-    /**
-     * 处理拍照结果
-     */
-    private void handleTakenPhoto() {
-        try {
-            File photoFile = new File(cameraPhotoPath);
-
-            if (photoFile.exists()) {
-                // 直接使用拍照保存的文件作为产品图片
-                currentPhotoPath = cameraPhotoPath;
-
-                // 显示图片
-                Glide.with(this)
-                        .load(photoFile)
-                        .centerCrop()
-                        .into(ivPhoto);
-            } else {
-                Toast.makeText(this, "照片保存失败", Toast.LENGTH_SHORT).show();
-            }
-        } catch (Exception e) {
-            e.printStackTrace();
-            Toast.makeText(this, "图片加载失败", Toast.LENGTH_SHORT).show();
-        }
-    }
-
-    /**
-     * 保存 Bitmap 到文件
-     */
-    private String saveBitmapToFile(Bitmap bitmap) {
-        try {
-            File imagesDir = new File(getFilesDir(), "product_images");
-            if (!imagesDir.exists()) {
-                imagesDir.mkdirs();
-            }
-
-            String fileName = "product_" + System.currentTimeMillis() + ".jpg";
-            File imageFile = new File(imagesDir, fileName);
-
-            FileOutputStream fos = new FileOutputStream(imageFile);
-            bitmap.compress(Bitmap.CompressFormat.JPEG, 80, fos);
-            fos.close();
-
-            return imageFile.getAbsolutePath();
-        } catch (Exception e) {
-            e.printStackTrace();
-            return null;
-        }
-    }
-
-    // ============ 加载和保存产品 ============
+    // ================= 加载与保存 =================
 
     private void loadProduct() {
         executorService.execute(() -> {
-            currentProduct = database.productDao().getProductById(productId);
-            if (currentProduct != null) {
-                runOnUiThread(() -> {
-                    etName.setText(currentProduct.getName() != null ? currentProduct.getName() : "");
-                    etSpecification.setText(currentProduct.getSpecification() != null ? currentProduct.getSpecification() : "");
-                    etSize.setText(currentProduct.getSize() != null ? currentProduct.getSize() : "");
-                    etMaterial.setText(currentProduct.getMaterial() != null ? currentProduct.getMaterial() : "");
-                    etRemark.setText(currentProduct.getRemark() != null ? currentProduct.getRemark() : "");
-                    etScript.setText(currentProduct.getScript() != null ? currentProduct.getScript() : "");
-
-                    if (currentProduct.getPrice() != 0) {
-                        etPrice.setText(String.valueOf(currentProduct.getPrice()));
-                    }
-
-                    currentPhotoPath = currentProduct.getPhotoPath();
-
-                    if (currentPhotoPath != null && !currentPhotoPath.isEmpty()) {
-                        File photoFile = new File(currentPhotoPath);
-                        if (photoFile.exists()) {
-                            Glide.with(this)
-                                    .load(photoFile)
-                                    .centerCrop()
-                                    .into(ivPhoto);
-                        }
-                    }
-                });
-            } else {
-                // 产品不存在，返回主页面
-                runOnUiThread(() -> {
-                    Toast.makeText(this, "产品不存在", Toast.LENGTH_SHORT).show();
+            Product product = database.productDao().getProductById(productId);
+            runOnUiThread(() -> {
+                if (isFinishing() || isDestroyed()) {
+                    return;
+                }
+                if (product == null) {
+                    toast(R.string.product_missing);
                     finish();
-                });
-            }
+                    return;
+                }
+                currentProduct = product;
+                etName.setText(nullToEmpty(product.getName()));
+                etSpecification.setText(nullToEmpty(product.getSpecification()));
+                etSize.setText(nullToEmpty(product.getSize()));
+                etMaterial.setText(nullToEmpty(product.getMaterial()));
+                etRemark.setText(nullToEmpty(product.getRemark()));
+                etScript.setText(nullToEmpty(product.getScript()));
+                if (product.getPrice() != 0) {
+                    etPrice.setText(String.format(Locale.US, "%.2f", product.getPrice()));
+                }
+                originalPhotoPath = product.getPhotoPath();
+                currentPhotoPath = originalPhotoPath;
+                showPhoto(originalPhotoPath);
+            });
         });
+    }
+
+    private void showPhoto(String path) {
+        if (path != null && !path.isEmpty() && new File(path).exists()) {
+            Glide.with(this).load(new File(path)).centerCrop().into(ivPhoto);
+        } else {
+            ivPhoto.setImageResource(R.drawable.ic_product);
+        }
     }
 
     private void saveProduct() {
@@ -449,47 +338,51 @@ public class AddProductActivity extends AppCompatActivity {
         String specification = etSpecification.getText().toString().trim();
         String size = etSize.getText().toString().trim();
         String material = etMaterial.getText().toString().trim();
-        String priceStr = etPrice.getText().toString().trim();
+        String priceText = etPrice.getText().toString().trim();
         String remark = etRemark.getText().toString().trim();
         String script = etScript.getText().toString().trim();
 
-        // 验证必填项
         if (TextUtils.isEmpty(name)) {
-            Toast.makeText(this, "请输入产品名称", Toast.LENGTH_SHORT).show();
+            toast(R.string.name_required);
             return;
         }
-
-        if (TextUtils.isEmpty(priceStr)) {
-            Toast.makeText(this, "请输入产品价格", Toast.LENGTH_SHORT).show();
+        if (TextUtils.isEmpty(priceText)) {
+            toast(R.string.price_required);
             return;
         }
 
         double price;
         try {
-            price = Double.parseDouble(priceStr);
+            price = Double.parseDouble(priceText);
         } catch (NumberFormatException e) {
-            Toast.makeText(this, "价格格式不正确", Toast.LENGTH_SHORT).show();
+            toast(R.string.price_invalid);
+            return;
+        }
+        if (!isValidPrice(price)) {
+            toast(R.string.price_invalid);
             return;
         }
 
-        // 保存产品
+        final double finalPrice = price;
+        final boolean isNewProduct = (productId == -1);
+        final String photoToSave = currentPhotoPath;
+        final String photoToDelete = (originalPhotoPath != null && !originalPhotoPath.equals(photoToSave))
+                ? originalPhotoPath
+                : null;
+
+        btnSave.setEnabled(false);
         executorService.execute(() -> {
             Product product;
-            boolean isNewProduct = (productId == -1);
-
             if (isNewProduct) {
-                // 新增产品
                 product = new Product();
             } else {
-                // 编辑产品 - 必须使用已存在的产品
                 if (currentProduct == null) {
                     currentProduct = database.productDao().getProductById(productId);
                 }
-
                 if (currentProduct == null) {
-                    // 产品不存在，提示错误并返回
                     runOnUiThread(() -> {
-                        Toast.makeText(this, "产品不存在，无法保存", Toast.LENGTH_SHORT).show();
+                        btnSave.setEnabled(true);
+                        toast(R.string.product_missing_cannot_save);
                         finish();
                     });
                     return;
@@ -502,10 +395,10 @@ public class AddProductActivity extends AppCompatActivity {
             product.setSize(size);
             product.setMaterial(material);
             product.setRemark(remark);
-            product.setPrice(price);
+            product.setPrice(finalPrice);
             product.setScript(script);
-            if (currentPhotoPath != null) {
-                product.setPhotoPath(currentPhotoPath);
+            if (photoToSave != null) {
+                product.setPhotoPath(photoToSave);
             }
 
             if (isNewProduct) {
@@ -514,16 +407,93 @@ public class AddProductActivity extends AppCompatActivity {
                 database.productDao().update(product);
             }
 
+            // 保存成功后才回收被替换掉的旧图
+            if (photoToDelete != null) {
+                ImageStore.deleteManaged(getApplicationContext(), photoToDelete);
+            }
+
             runOnUiThread(() -> {
-                Toast.makeText(this, "保存成功", Toast.LENGTH_SHORT).show();
+                if (isFinishing() || isDestroyed()) {
+                    return;
+                }
+                saved = true;
+                toast(R.string.save_success);
                 finish();
             });
         });
     }
 
+    /**
+     * 价格校验：拒绝 NaN / Infinity / 负数 / 超范围值
+     */
+    private static boolean isValidPrice(double price) {
+        return !Double.isNaN(price) && !Double.isInfinite(price) && price >= 0 && price < 1_000_000_000d;
+    }
+
+    private static String nullToEmpty(String value) {
+        return value == null ? "" : value;
+    }
+
+    // ================= 状态保存 =================
+
+    @Override
+    protected void onSaveInstanceState(Bundle outState) {
+        super.onSaveInstanceState(outState);
+        outState.putString(STATE_NAME, etName.getText().toString());
+        outState.putString(STATE_SPECIFICATION, etSpecification.getText().toString());
+        outState.putString(STATE_SIZE, etSize.getText().toString());
+        outState.putString(STATE_MATERIAL, etMaterial.getText().toString());
+        outState.putString(STATE_PRICE, etPrice.getText().toString());
+        outState.putString(STATE_REMARK, etRemark.getText().toString());
+        outState.putString(STATE_SCRIPT, etScript.getText().toString());
+        outState.putString(STATE_PHOTO_PATH, currentPhotoPath);
+        outState.putString(STATE_ORIGINAL_PHOTO, originalPhotoPath);
+        outState.putString(STATE_CAMERA_TEMP, cameraTempPath);
+    }
+
+    private void restoreState(Bundle state) {
+        etName.setText(state.getString(STATE_NAME, ""));
+        etSpecification.setText(state.getString(STATE_SPECIFICATION, ""));
+        etSize.setText(state.getString(STATE_SIZE, ""));
+        etMaterial.setText(state.getString(STATE_MATERIAL, ""));
+        etPrice.setText(state.getString(STATE_PRICE, ""));
+        etRemark.setText(state.getString(STATE_REMARK, ""));
+        etScript.setText(state.getString(STATE_SCRIPT, ""));
+
+        originalPhotoPath = state.getString(STATE_ORIGINAL_PHOTO);
+        currentPhotoPath = state.getString(STATE_PHOTO_PATH);
+        cameraTempPath = state.getString(STATE_CAMERA_TEMP);
+        showPhoto(currentPhotoPath);
+
+        // 编辑模式下仍需数据库实体用于更新，但不覆盖输入框
+        if (productId != -1) {
+            executorService.execute(() -> {
+                Product product = database.productDao().getProductById(productId);
+                if (product != null) {
+                    currentProduct = product;
+                }
+            });
+        }
+    }
+
+    // ================= 生命周期 =================
+
+    private void toast(int resId) {
+        Toast.makeText(this, resId, Toast.LENGTH_SHORT).show();
+    }
+
     @Override
     protected void onDestroy() {
         super.onDestroy();
+        discardCameraTemp();
+
+        // 用户放弃编辑（未保存就退出）时，回收这次新生成但没入库的图片；
+        // 屏幕旋转等重建场景 isFinishing() 为 false，不会误删
+        if (isFinishing() && !saved && currentPhotoPath != null
+                && !currentPhotoPath.equals(originalPhotoPath)) {
+            ImageStore.deleteManaged(this, currentPhotoPath);
+        }
+
         executorService.shutdown();
     }
 }

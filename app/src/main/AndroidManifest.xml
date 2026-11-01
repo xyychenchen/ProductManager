@@ -2,21 +2,14 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
-    <!-- 存储权限 -->
-    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
-        android:maxSdkVersion="32" />
-    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
-    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
-        android:maxSdkVersion="28"
-        tools:ignore="ScopedStorage" />
-
-    <!-- 相机权限 -->
-    <uses-permission android:name="android.permission.CAMERA" />
+    <!--
+        不再声明存储与相机权限：
+        - 选图走系统文件选择器（ACTION_GET_CONTENT），由系统授予临时读取权限
+        - 拍照调用系统相机（TakePicture），未声明 CAMERA 时无需运行时授权
+        - 图片只写入应用私有目录，无需外部存储权限
+    -->
     <uses-feature android:name="android.hardware.camera" android:required="false" />
     <uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />
-
-    <!-- 震动权限（用于按钮点击反馈） -->
-    <uses-permission android:name="android.permission.VIBRATE" />
 
     <application
         android:allowBackup="true"

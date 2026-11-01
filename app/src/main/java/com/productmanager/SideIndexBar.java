@@ -8,50 +8,50 @@ import android.util.AttributeSet;
 import android.view.MotionEvent;
 import android.view.View;
 
+import androidx.core.content.ContextCompat;
+
 import java.util.ArrayList;
 import java.util.List;
 
 /**
  * 字母索引侧边栏
- * 类似通讯录的字母快速索引功能
- * 只显示已有产品的首字母
- * 如果有收藏产品，顶部显示星星
+ *
+ * 类似通讯录的字母快速索引：只显示已有产品的首字母，收藏分组显示★。
+ *
+ * 相比旧实现的改进：
+ * - 星形 Path 与选中画笔预先构建，拖动时不再产生垃圾对象
+ * - 间距按可用高度自适应，大字号/小屏不会互相重叠
+ * - 只有索引变化时才回调，避免拖动时反复触发列表滚动
  */
 public class SideIndexBar extends View {
 
-    // 字母间距（dp）- 舒适的间距，有空间感
-    private static final float LETTER_SPACING_DP = 20f;
-
-    // 字母文字大小（sp）
-    private static final float LETTER_TEXT_SIZE_SP = 14f;
-
-    // 星星大小（dp）
+    private static final float MAX_SPACING_DP = 20f;
+    private static final float TEXT_SIZE_SP = 14f;
     private static final float STAR_SIZE_DP = 16f;
+    private static final String STAR = "★";
 
-    // 当前显示的元素列表（可能包含★和字母）
-    private List<String> currentItems = new ArrayList<>();
+    private final List<String> items = new ArrayList<>();
 
-    // 是否有收藏产品（用于绘制星星）
-    private boolean hasFavorites = false;
-
-    private Paint paint;
+    private Paint normalPaint;
     private Paint selectedPaint;
     private Paint starPaint;
-    private int selectedPosition = -1;
-    private OnLetterSelectedListener listener;
+    private Paint starSelectedPaint;
 
-    // 实际使用的间距（像素）
-    private float letterSpacing;
-    private float starSize;
+    private final Path starPath = new Path();
+    private float starSizePx;
+    private float maxSpacingPx;
+
+    private int selectedPosition = -1;
+    /** 上一次真正通知出去的元素，用于去重 */
+    private String lastDispatched;
+    private OnLetterSelectedListener listener;
 
     public interface OnLetterSelectedListener {
         void onLetterSelected(String letter);
-        void onLetterReleased();
-        void onStarSelected();
-    }
 
-    public void setOnLetterSelectedListener(OnLetterSelectedListener listener) {
-        this.listener = listener;
+        void onLetterReleased();
+
+        void onStarSelected();
     }
 
     public SideIndexBar(Context context) {
@@ -70,231 +70,224 @@ public class SideIndexBar extends View {
     }
 
     private void init(Context context) {
-        // 将 dp 转换为像素
         float density = context.getResources().getDisplayMetrics().density;
-        letterSpacing = LETTER_SPACING_DP * density;
-        starSize = STAR_SIZE_DP * density;
+        maxSpacingPx = MAX_SPACING_DP * density;
+        starSizePx = STAR_SIZE_DP * density;
 
-        // 将 sp 转换为像素
-        float scaledDensity = context.getResources().getDisplayMetrics().scaledDensity;
-        float textSize = LETTER_TEXT_SIZE_SP * scaledDensity;
+        float textSize = TEXT_SIZE_SP * context.getResources().getDisplayMetrics().scaledDensity;
 
-        paint = new Paint();
-        paint.setAntiAlias(true);
-        paint.setTextSize(textSize);
-        paint.setColor(0xFF666666);
-        paint.setTextAlign(Paint.Align.CENTER);
+        normalPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        normalPaint.setTextSize(textSize);
+        normalPaint.setColor(ContextCompat.getColor(context, R.color.text_secondary));
+        normalPaint.setTextAlign(Paint.Align.CENTER);
 
-        selectedPaint = new Paint();
-        selectedPaint.setAntiAlias(true);
+        selectedPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
         selectedPaint.setTextSize(textSize * 1.15f);
-        selectedPaint.setColor(0xFF2196F3);
+        selectedPaint.setColor(ContextCompat.getColor(context, R.color.primary));
         selectedPaint.setFakeBoldText(true);
         selectedPaint.setTextAlign(Paint.Align.CENTER);
 
-        // 填充星星画笔（金色）
-        starPaint = new Paint();
-        starPaint.setAntiAlias(true);
-        starPaint.setColor(0xFFFFD700);
+        starPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
         starPaint.setStyle(Paint.Style.FILL);
+        starPaint.setColor(0xFFFFD700);
+
+        starSelectedPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        starSelectedPaint.setStyle(Paint.Style.FILL);
+        starSelectedPaint.setColor(ContextCompat.getColor(context, R.color.primary));
+
+        buildStarPath();
+    }
+
+    public void setOnLetterSelectedListener(OnLetterSelectedListener listener) {
+        this.listener = listener;
     }
 
     /**
-     * 设置要显示的元素列表（从adapter获取，已包含★和字母）
+     * 设置要显示的元素（★ + 字母），由 Adapter 提供
      */
-    public void setLetters(List<String> items) {
-        currentItems.clear();
+    public void setItems(List<String> newItems) {
+        items.clear();
+        if (newItems != null) {
+            items.addAll(newItems);
+        }
+        selectedPosition = -1;
+        lastDispatched = null;
 
-        if (items == null || items.isEmpty()) {
+        if (items.isEmpty()) {
             setVisibility(GONE);
             return;
         }
-
-        currentItems.addAll(items);
         setVisibility(VISIBLE);
         invalidate();
     }
 
     /**
-     * 设置是否有收藏产品
+     * 高亮指定元素（滚动时同步）
      */
-    public void setHasFavorites(boolean hasFavorites) {
-        this.hasFavorites = hasFavorites;
-        invalidate();
+    public void highlightLetter(String letter) {
+        int index = items.indexOf(letter);
+        if (index >= 0 && index != selectedPosition) {
+            selectedPosition = index;
+            invalidate();
+        }
+    }
+
+    public void clearHighlight() {
+        if (selectedPosition != -1) {
+            selectedPosition = -1;
+            invalidate();
+        }
     }
 
     /**
-     * 绘制星星形状
+     * 只构建一次：拖动时不需要再 new Path
      */
-    private void drawStar(Canvas canvas, float centerX, float centerY, float size, boolean selected) {
-        Path path = new Path();
-        float outerRadius = size / 2;
-        float innerRadius = outerRadius * 0.4f;
-
-        // 五角星有5个外顶点和5个内顶点
+    private void buildStarPath() {
+        starPath.reset();
+        float outer = starSizePx / 2f;
+        float inner = outer * 0.4f;
         for (int i = 0; i < 10; i++) {
-            float radius = (i % 2 == 0) ? outerRadius : innerRadius;
-            double angle = Math.toRadians(i * 36 - 90); // 从顶部开始
-            float x = centerX + (float) (radius * Math.cos(angle));
-            float y = centerY + (float) (radius * Math.sin(angle));
-
+            float radius = (i % 2 == 0) ? outer : inner;
+            double angle = Math.toRadians(i * 36 - 90);
+            float x = (float) (radius * Math.cos(angle));
+            float y = (float) (radius * Math.sin(angle));
             if (i == 0) {
-                path.moveTo(x, y);
+                starPath.moveTo(x, y);
             } else {
-                path.lineTo(x, y);
+                starPath.lineTo(x, y);
             }
         }
-        path.close();
+        starPath.close();
+    }
 
-        // 选中时使用蓝色
-        if (selected) {
-            Paint selectedStarPaint = new Paint(starPaint);
-            selectedStarPaint.setColor(0xFF2196F3);
-            canvas.drawPath(path, selectedStarPaint);
-        } else {
-            canvas.drawPath(path, starPaint);
+    /**
+     * 元素间距：优先 20dp，空间不够时按可用高度压缩，保证不重叠
+     */
+    private float spacing() {
+        int count = items.size();
+        if (count <= 1) {
+            return 0f;
         }
+        float available = getHeight() - getPaddingTop() - getPaddingBottom();
+        return Math.max(1f, Math.min(maxSpacingPx, available / count));
+    }
+
+    private float startY() {
+        int count = items.size();
+        if (count <= 1) {
+            return getHeight() / 2f;
+        }
+        float totalHeight = spacing() * (count - 1);
+        return (getHeight() - totalHeight) / 2f;
     }
 
     @Override
     protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
 
-        if (getHeight() == 0 || getWidth() == 0 || currentItems.isEmpty()) {
+        int count = items.size();
+        if (count == 0 || getHeight() == 0 || getWidth() == 0) {
             return;
         }
 
         float centerX = getWidth() / 2f;
-        int itemCount = currentItems.size();
+        float step = spacing();
+        float startY = startY();
 
-        // 计算所有元素需要的总高度
-        float totalHeight = (itemCount - 1) * letterSpacing;
+        Paint.FontMetrics fm = normalPaint.getFontMetrics();
+        float textOffset = (fm.descent - fm.ascent) / 2f - fm.descent;
 
-        // 计算起始Y位置（使元素整体居中）
-        float startY;
-        if (itemCount == 1) {
-            startY = getHeight() / 2f;
-        } else {
-            startY = (getHeight() - totalHeight) / 2f;
-        }
+        for (int i = 0; i < count; i++) {
+            float y = startY + i * step;
+            String item = items.get(i);
+            boolean selected = (i == selectedPosition);
 
-        // 获取文字高度用于垂直居中
-        Paint.FontMetrics fm = paint.getFontMetrics();
-        float textOffset = (fm.descent - fm.ascent) / 2 - fm.descent;
-
-        // 绘制每个元素
-        for (int i = 0; i < itemCount; i++) {
-            float y = startY + i * letterSpacing;
-
-            // 确保Y坐标在view范围内
-            if (y < letterSpacing / 2) {
-                y = letterSpacing / 2;
-            } else if (y > getHeight() - letterSpacing / 2) {
-                y = getHeight() - letterSpacing / 2;
-            }
-
-            String item = currentItems.get(i);
-            boolean isSelected = (i == selectedPosition);
-
-            if (item.equals("★")) {
-                // 绘制星星
-                drawStar(canvas, centerX, y, starSize, isSelected);
+            if (STAR.equals(item)) {
+                canvas.save();
+                canvas.translate(centerX, y);
+                canvas.drawPath(starPath, selected ? starSelectedPaint : starPaint);
+                canvas.restore();
             } else {
-                // 绘制字母
-                if (isSelected) {
-                    canvas.drawText(item, centerX, y + textOffset, selectedPaint);
-                } else {
-                    canvas.drawText(item, centerX, y + textOffset, paint);
-                }
+                canvas.drawText(item, centerX, y + textOffset, selected ? selectedPaint : normalPaint);
             }
         }
     }
 
     @Override
     public boolean onTouchEvent(MotionEvent event) {
-        if (currentItems.isEmpty()) {
+        if (items.isEmpty()) {
             return false;
         }
 
-        int itemCount = currentItems.size();
-        float totalHeight = (itemCount - 1) * letterSpacing;
-        float startY;
-        if (itemCount == 1) {
-            startY = getHeight() / 2f;
-        } else {
-            startY = (getHeight() - totalHeight) / 2f;
-        }
-
-        float y = event.getY();
-
-        // 计算触摸位置对应的元素索引
-        int position = -1;
-        for (int i = 0; i < itemCount; i++) {
-            float itemY = startY + i * letterSpacing;
-            float halfSpacing = letterSpacing / 2;
-            if (y >= itemY - halfSpacing && y < itemY + halfSpacing) {
-                position = i;
-                break;
-            }
-        }
-
-        // 如果没有精确匹配，找最近的元素
-        if (position == -1) {
-            if (y < startY) {
-                position = 0;
-            } else {
-                position = itemCount - 1;
-            }
-        }
-
-        // 确保位置有效
-        if (position < 0) position = 0;
-        if (position >= itemCount) position = itemCount - 1;
-
-        switch (event.getAction()) {
+        switch (event.getActionMasked()) {
             case MotionEvent.ACTION_DOWN:
-            case MotionEvent.ACTION_MOVE:
-                selectedPosition = position;
-                invalidate();
-                if (listener != null) {
-                    String item = currentItems.get(position);
-                    if (item.equals("★")) {
-                        listener.onStarSelected();
-                    } else {
-                        listener.onLetterSelected(item);
-                    }
+                // 拖动索引时不要让父容器（RecyclerView）抢走事件
+                if (getParent() != null) {
+                    getParent().requestDisallowInterceptTouchEvent(true);
                 }
-                break;
+                handleTouch(event.getY());
+                return true;
+
+            case MotionEvent.ACTION_MOVE:
+                handleTouch(event.getY());
+                return true;
+
             case MotionEvent.ACTION_UP:
-            case MotionEvent.ACTION_CANCEL:
-                selectedPosition = -1;
-                invalidate();
+                performClick();
+                clearHighlight();
+                lastDispatched = null;
                 if (listener != null) {
                     listener.onLetterReleased();
                 }
-                break;
-        }
-        return true;
-    }
+                return true;
 
-    /**
-     * 高亮显示指定元素
-     */
-    public void highlightLetter(String letter) {
-        for (int i = 0; i < currentItems.size(); i++) {
-            if (currentItems.get(i).equals(letter)) {
-                selectedPosition = i;
-                invalidate();
-                return;
-            }
+            case MotionEvent.ACTION_CANCEL:
+                clearHighlight();
+                lastDispatched = null;
+                if (listener != null) {
+                    listener.onLetterReleased();
+                }
+                return true;
+
+            default:
+                return super.onTouchEvent(event);
         }
     }
 
-    /**
-     * 清除高亮
-     */
-    public void clearHighlight() {
-        selectedPosition = -1;
-        invalidate();
+    private void handleTouch(float y) {
+        int count = items.size();
+        int position;
+        if (count == 1) {
+            position = 0;
+        } else {
+            float step = spacing();
+            position = Math.round((y - startY()) / step);
+            position = Math.max(0, Math.min(count - 1, position));
+        }
+
+        if (position != selectedPosition) {
+            selectedPosition = position;
+            invalidate();
+        }
+
+        String item = items.get(position);
+        if (item.equals(lastDispatched)) {
+            return;
+        }
+        lastDispatched = item;
+
+        if (listener == null) {
+            return;
+        }
+        if (STAR.equals(item)) {
+            listener.onStarSelected();
+        } else {
+            listener.onLetterSelected(item);
+        }
+    }
+
+    @Override
+    public boolean performClick() {
+        return super.performClick();
     }
 }

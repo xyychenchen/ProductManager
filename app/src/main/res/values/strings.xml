@@ -7,6 +7,8 @@
     <string name="product_name">产品名称</string>
     <string name="specification">规格</string>
     <string name="size">尺寸</string>
+    <string name="material">材质</string>
+    <string name="remark">备注</string>
     <string name="price">价格（美金）</string>
     <string name="save">保存</string>
     <string name="delete">删除</string>
@@ -14,4 +16,45 @@
     <string name="empty_list">暂无产品\n点击右下角按钮添加</string>
     <string name="select_photo">点击选择照片</string>
     <string name="delete_confirm">确定要删除该产品吗？</string>
+
+    <!-- 列表页 -->
+    <string name="favorite_section">收藏区域</string>
+    <string name="letter_index">字母索引栏</string>
+    <string name="product_photo">产品图片</string>
+    <string name="field_with_value">%1$s: %2$s</string>
+    <string name="product_count">共 %1$d 个产品</string>
+    <string name="search_result_count">搜索结果: %1$d / %2$d 个产品</string>
+    <string name="favorite_added">已收藏: %1$s</string>
+    <string name="favorite_removed">已取消收藏: %1$s</string>
+    <string name="product_deleted">已删除: %1$s</string>
+    <string name="undo">撤销</string>
+    <string name="delete_title">删除产品</string>
+    <string name="delete_product_message">确定要删除 "%1$s" 吗？</string>
+
+    <!-- 编辑页 -->
+    <string name="photo_pick_title">选择照片</string>
+    <string name="photo_pick_camera">拍照</string>
+    <string name="photo_pick_gallery">从相册选择</string>
+    <string name="name_required">请输入产品名称</string>
+    <string name="price_required">请输入产品价格</string>
+    <string name="price_invalid">价格格式不正确</string>
+    <string name="save_success">保存成功</string>
+    <string name="product_missing">产品不存在</string>
+    <string name="product_missing_cannot_save">产品不存在，无法保存</string>
+    <string name="image_load_failed">图片加载失败</string>
+    <string name="image_save_failed">照片保存失败</string>
+    <string name="no_camera_app">未找到可用的相机应用</string>
+
+    <!-- 话术页 -->
+    <string name="script_of_product">产品：%1$s</string>
+    <string name="script_title">产品话术</string>
+    <string name="script_empty">暂无话术内容</string>
+
+    <!-- 设置页 -->
+    <string name="version_label">版本 %1$s</string>
+    <string name="no_data_to_export">没有产品数据可导出</string>
+    <string name="export_preparing">正在准备…</string>
+    <string name="exporting">正在导出…</string>
+    <string name="export_progress">正在导出… %1$d/%2$d</string>
+    <string name="export_failed">导出失败: %1$s</string>
 </resources>

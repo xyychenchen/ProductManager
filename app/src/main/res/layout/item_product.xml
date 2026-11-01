@@ -1,50 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout
-    xmlns:android="http://schemas.android.com/apk/res/android"
+<!-- 产品条目：只保留产品内容，分组头已拆分到 item_letter_header.xml -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
+    android:background="@color/item_background"
     android:orientation="vertical">
 
-    <!-- 字母头部 - 支持显示星标或字母 -->
-    <LinearLayout
-        android:id="@+id/ll_letter_header"
-        android:layout_width="match_parent"
-        android:layout_height="32dp"
-        android:background="#F0F0F0"
-        android:gravity="center_vertical"
-        android:orientation="horizontal"
-        android:paddingStart="16dp"
-        android:paddingEnd="16dp"
-        android:visibility="gone"
-        tools:visibility="visible">
-
-        <!-- 收藏星标图标 -->
-        <ImageView
-            android:id="@+id/iv_header_star"
-            android:layout_width="18dp"
-            android:layout_height="18dp"
-            android:src="@drawable/ic_favorite"
-            android:visibility="gone" />
-
-        <!-- 字母文字 -->
-        <TextView
-            android:id="@+id/tv_letter_header"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:textColor="#2196F3"
-            android:textSize="14sp"
-            android:textStyle="bold"
-            tools:text="A" />
-
-    </LinearLayout>
-
-    <!-- 产品条目内容区域 -->
     <LinearLayout
         android:id="@+id/ll_product_content"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:background="#FFFFFF"
         android:orientation="horizontal"
         android:padding="12dp">
 
@@ -58,7 +24,8 @@
                 android:id="@+id/iv_photo"
                 android:layout_width="match_parent"
                 android:layout_height="match_parent"
-                android:background="#F5F5F5"
+                android:background="@color/photo_placeholder_bg"
+                android:contentDescription="@string/product_photo"
                 android:scaleType="centerCrop"
                 android:src="@drawable/ic_product" />
 
@@ -73,69 +40,64 @@
             android:layout_weight="1"
             android:orientation="vertical">
 
-            <!-- 产品名称 -->
             <TextView
                 android:id="@+id/tv_name"
-                android:layout_width="wrap_content"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:ellipsize="end"
                 android:maxLines="3"
-                android:textColor="#333333"
+                android:textColor="@color/text_primary"
                 android:textSize="16sp"
                 android:textStyle="bold"
                 tools:text="Product Name" />
 
-            <!-- 规格 -->
             <TextView
                 android:id="@+id/tv_specification"
-                android:layout_width="wrap_content"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="2dp"
                 android:ellipsize="end"
                 android:maxLines="2"
-                android:textColor="#888888"
+                android:textColor="@color/text_secondary_light"
                 android:textSize="13sp"
                 android:visibility="gone"
                 tools:text="规格: Large"
                 tools:visibility="visible" />
 
-            <!-- 尺寸 -->
             <TextView
                 android:id="@+id/tv_size"
-                android:layout_width="wrap_content"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="2dp"
                 android:ellipsize="end"
                 android:maxLines="1"
-                android:textColor="#888888"
+                android:textColor="@color/text_secondary_light"
                 android:textSize="13sp"
                 android:visibility="gone"
                 tools:text="尺寸: 10x20cm"
                 tools:visibility="visible" />
 
-            <!-- 材质 -->
             <TextView
                 android:id="@+id/tv_material"
-                android:layout_width="wrap_content"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="2dp"
                 android:ellipsize="end"
                 android:maxLines="1"
-                android:textColor="#888888"
+                android:textColor="@color/text_secondary_light"
                 android:textSize="13sp"
                 android:visibility="gone"
                 tools:text="材质: 纯棉"
                 tools:visibility="visible" />
 
-            <!-- 备注 -->
             <TextView
                 android:id="@+id/tv_remark"
-                android:layout_width="wrap_content"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="2dp"
                 android:ellipsize="end"
                 android:maxLines="2"
-                android:textColor="#888888"
+                android:textColor="@color/text_secondary_light"
                 android:textSize="13sp"
                 android:visibility="gone"
                 tools:text="备注: 这是备注内容"
@@ -149,19 +111,19 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_gravity="center_vertical"
-            android:textColor="#4CAF50"
+            android:layout_marginStart="8dp"
+            android:textColor="@color/price"
             android:textSize="18sp"
             android:textStyle="bold"
             tools:text="$99.99" />
 
     </LinearLayout>
 
-    <!-- 分隔线 -->
     <View
         android:id="@+id/view_divider"
         android:layout_width="match_parent"
         android:layout_height="1dp"
         android:layout_marginStart="88dp"
-        android:background="#EEEEEE" />
+        android:background="@color/divider" />
 
 </LinearLayout>

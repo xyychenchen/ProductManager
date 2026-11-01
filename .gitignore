@@ -81,3 +81,7 @@ lint/tmp/
 
 # Secrets
 secrets.properties
+
+# 签名配置（含密码，禁止提交）
+keystore.properties
+*.jks

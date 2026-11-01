@@ -1,20 +1,21 @@
 package com.productmanager;
 
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.text.Spanned;
+import android.text.TextUtils;
 import android.widget.TextView;
 
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.content.ContextCompat;
 
 import com.google.android.material.appbar.MaterialToolbar;
 
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+
 import io.noties.markwon.Markwon;
-import io.noties.markwon.core.CorePlugin;
-import io.noties.markwon.ext.strikethrough.StrikethroughPlugin;
-import io.noties.markwon.ext.tables.TablePlugin;
-import io.noties.markwon.ext.tasklist.TaskListPlugin;
-import io.noties.markwon.html.HtmlPlugin;
-import io.noties.markwon.image.glide.GlideImagesPlugin;
 
 /**
  * Markdown预览页面
@@ -22,29 +23,26 @@ import io.noties.markwon.image.glide.GlideImagesPlugin;
  */
 public class ScriptViewerActivity extends AppCompatActivity {
 
+    public static final String EXTRA_PRODUCT_ID = "product_id";
     public static final String EXTRA_PRODUCT_NAME = "product_name";
-    public static final String EXTRA_SCRIPT = "script";
+    /** 编辑页尚未保存的草稿；为空时按 productId 从数据库读取 */
+    public static final String EXTRA_SCRIPT_DRAFT = "script_draft";
 
     private MaterialToolbar toolbar;
     private TextView tvProductName;
     private TextView tvScriptPreview;
 
     private Markwon markwon;
+    private final Handler handler = new Handler(Looper.getMainLooper());
+    private ExecutorService executorService;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_script_viewer);
 
-        // 初始化Markwon（Markdown渲染器）
-        markwon = Markwon.builder(this)
-                .usePlugin(CorePlugin.create())
-                .usePlugin(StrikethroughPlugin.create())
-                .usePlugin(TablePlugin.create(this))
-                .usePlugin(TaskListPlugin.create(this))
-                .usePlugin(HtmlPlugin.create())
-                .usePlugin(GlideImagesPlugin.create(this))
-                .build();
+        markwon = MarkwonHolder.get(this);
+        executorService = Executors.newSingleThreadExecutor();
 
         initViews();
         setupToolbar();
@@ -67,22 +65,66 @@ public class ScriptViewerActivity extends AppCompatActivity {
 
     private void loadScript() {
         String productName = getIntent().getStringExtra(EXTRA_PRODUCT_NAME);
-        String script = getIntent().getStringExtra(EXTRA_SCRIPT);
+        String draft = getIntent().getStringExtra(EXTRA_SCRIPT_DRAFT);
+        int productId = getIntent().getIntExtra(EXTRA_PRODUCT_ID, -1);
 
-        // 显示产品名称
-        if (productName != null && !productName.isEmpty()) {
-            tvProductName.setText("产品：" + productName);
+        if (!TextUtils.isEmpty(productName)) {
+            tvProductName.setText(getString(R.string.script_of_product, productName));
         } else {
-            tvProductName.setText("产品话术");
+            tvProductName.setText(R.string.script_title);
         }
 
-        // 渲染Markdown内容
-        if (script != null && !script.isEmpty()) {
-            Spanned markdown = markwon.toMarkdown(script);
-            markwon.setParsedMarkdown(tvScriptPreview, markdown);
-        } else {
-            tvScriptPreview.setText("暂无话术内容");
-            tvScriptPreview.setTextColor(getResources().getColor(android.R.color.darker_gray));
+        if (!TextUtils.isEmpty(draft)) {
+            render(draft);
+            return;
         }
+        if (productId == -1) {
+            showEmpty();
+            return;
+        }
+
+        // 从数据库取完整话术：避免把长文本塞进 Intent
+        executorService.execute(() -> {
+            Product product = ProductDatabase.getDatabase(getApplicationContext())
+                    .productDao()
+                    .getProductById(productId);
+            handler.post(() -> {
+                if (isFinishing() || isDestroyed()) {
+                    return;
+                }
+                if (product == null || TextUtils.isEmpty(product.getScript())) {
+                    showEmpty();
+                } else {
+                    render(product.getScript());
+                }
+            });
+        });
+    }
+
+    /**
+     * Markdown 解析放在后台线程，长话术不阻塞首帧
+     */
+    private void render(final String script) {
+        executorService.execute(() -> {
+            final Spanned parsed = markwon.toMarkdown(script);
+            handler.post(() -> {
+                if (isFinishing() || isDestroyed()) {
+                    return;
+                }
+                markwon.setParsedMarkdown(tvScriptPreview, parsed);
+            });
+        });
+    }
+
+    private void showEmpty() {
+        tvScriptPreview.setText(R.string.script_empty);
+        tvScriptPreview.setTextColor(ContextCompat.getColor(this, R.color.text_hint));
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        handler.removeCallbacksAndMessages(null);
+        executorService.shutdown();
     }
 }

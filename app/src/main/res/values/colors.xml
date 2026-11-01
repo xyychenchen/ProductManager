@@ -12,6 +12,11 @@
     <color name="item_background">#FFFFFF</color>
     <color name="letter_header_background">#F0F0F0</color>
 
+    <!-- 列表条目 -->
+    <color name="text_secondary_light">#888888</color>
+    <color name="price">#4CAF50</color>
+    <color name="photo_placeholder_bg">#F5F5F5</color>
+
     <!-- Launcher icon background color -->
     <color name="ic_launcher_background">#FFFFFF</color>
 </resources>
