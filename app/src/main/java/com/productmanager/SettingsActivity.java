@@ -22,6 +22,7 @@ import com.google.android.material.appbar.MaterialToolbar;
 import java.io.BufferedWriter;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
+import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.OutputStreamWriter;
 import java.io.PrintWriter;
@@ -53,6 +54,8 @@ public class SettingsActivity extends AppCompatActivity {
 
     private List<Product> pendingExport;
     private ActivityResultLauncher<String> createDocumentLauncher;
+    private ActivityResultLauncher<String[]> openCsvLauncher;
+    private ActivityResultLauncher<String> saveTemplateLauncher;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -69,6 +72,22 @@ public class SettingsActivity extends AppCompatActivity {
                         writeHtml(uri, pendingExport);
                     }
                     pendingExport = null;
+                });
+
+        openCsvLauncher = registerForActivityResult(
+                new ActivityResultContracts.OpenDocument(),
+                uri -> {
+                    if (uri != null) {
+                        parseCsv(uri);
+                    }
+                });
+
+        saveTemplateLauncher = registerForActivityResult(
+                new ActivityResultContracts.CreateDocument("text/csv"),
+                uri -> {
+                    if (uri != null) {
+                        writeTemplate(uri);
+                    }
                 });
 
         initViews();
@@ -94,6 +113,8 @@ public class SettingsActivity extends AppCompatActivity {
         findViewById(R.id.card_about).setOnClickListener(v -> showAboutDialog());
         findViewById(R.id.card_author).setOnClickListener(v -> openGitHub());
         findViewById(R.id.card_export).setOnClickListener(v -> exportData());
+        findViewById(R.id.card_import).setOnClickListener(v -> importFromCsv());
+        findViewById(R.id.card_template).setOnClickListener(v -> saveTemplate());
     }
 
     private void loadVersionInfo() {
@@ -127,6 +148,174 @@ public class SettingsActivity extends AppCompatActivity {
         } catch (Exception e) {
             Toast.makeText(this, "无法打开浏览器", Toast.LENGTH_SHORT).show();
         }
+    }
+
+    // ================= 导入 =================
+
+    /**
+     * 选 CSV 文件。
+     *
+     * MIME 给多个值再加 "*\/*" 兜底：不同文件管理器对 csv 的类型标注不一致，
+     * 有的报 text/comma-separated-values，有的报 application/vnd.ms-excel，
+     * 只写 text/csv 会导致部分机型里文件是灰的选不中。
+     */
+    private void importFromCsv() {
+        openCsvLauncher.launch(new String[]{
+                "text/csv",
+                "text/comma-separated-values",
+                "text/plain",
+                "application/csv",
+                "*/*"
+        });
+    }
+
+    private void parseCsv(Uri uri) {
+        showProgress(R.string.import_parsing);
+        executorService.execute(() -> {
+            CsvImporter.Result result;
+            try (InputStream in = getContentResolver().openInputStream(uri)) {
+                if (in == null) {
+                    throw new IllegalStateException("无法读取该文件");
+                }
+                result = CsvImporter.parse(in);
+            } catch (Exception e) {
+                e.printStackTrace();
+                handler.post(() -> {
+                    if (isFinishing() || isDestroyed()) {
+                        return;
+                    }
+                    dismissProgress();
+                    toast(getString(R.string.import_failed, String.valueOf(e.getMessage())));
+                });
+                return;
+            }
+
+            handler.post(() -> {
+                if (isFinishing() || isDestroyed()) {
+                    return;
+                }
+                dismissProgress();
+                showImportPreview(result);
+            });
+        });
+    }
+
+    /** 导入前先摊开给用户看，确认了才写库 */
+    private void showImportPreview(CsvImporter.Result result) {
+        if (result.importedCount() == 0) {
+            new AlertDialog.Builder(this)
+                    .setTitle("没有可导入的数据")
+                    .setMessage(result.skipped.isEmpty()
+                            ? "文件里没有数据行。请确认第一行是表头，从第二行开始是产品数据。"
+                            : "所有行都被跳过了：\n\n" + joinLines(result.skipped, 5))
+                    .setPositiveButton("知道了", null)
+                    .show();
+            return;
+        }
+
+        StringBuilder message = new StringBuilder();
+        message.append("共读取 ").append(result.totalRows).append(" 行数据\n");
+        message.append("可导入 ").append(result.importedCount()).append(" 条");
+        if (result.skippedCount() > 0) {
+            message.append("，跳过 ").append(result.skippedCount()).append(" 条");
+        }
+        message.append("\n\n");
+
+        int previewSize = Math.min(3, result.importedCount());
+        message.append("前 ").append(previewSize).append(" 条：\n");
+        for (int i = 0; i < previewSize; i++) {
+            Product p = result.products.get(i);
+            message.append("· ").append(p.getName())
+                    .append("　").append(p.getFormattedPrice()).append("\n");
+        }
+
+        if (result.skippedCount() > 0) {
+            message.append("\n跳过原因：\n").append(joinLines(result.skipped, 3));
+        }
+
+        message.append("\n导入后会追加到现有列表，不会删除已有数据。");
+
+        new AlertDialog.Builder(this)
+                .setTitle("确认导入")
+                .setMessage(message.toString())
+                .setNegativeButton("取消", null)
+                .setPositiveButton("导入 " + result.importedCount() + " 条",
+                        (dialog, which) -> doImport(result.products))
+                .show();
+    }
+
+    private void doImport(List<Product> products) {
+        showProgress(R.string.import_saving);
+        executorService.execute(() -> {
+            try {
+                database.productDao().insertAll(products);
+            } catch (Exception e) {
+                e.printStackTrace();
+                handler.post(() -> {
+                    if (isFinishing() || isDestroyed()) {
+                        return;
+                    }
+                    dismissProgress();
+                    toast(getString(R.string.import_failed, String.valueOf(e.getMessage())));
+                });
+                return;
+            }
+            final int count = products.size();
+            handler.post(() -> {
+                if (isFinishing() || isDestroyed()) {
+                    return;
+                }
+                dismissProgress();
+                Toast.makeText(SettingsActivity.this,
+                        getString(R.string.import_success, count), Toast.LENGTH_LONG).show();
+            });
+        });
+    }
+
+    private void saveTemplate() {
+        saveTemplateLauncher.launch("产品导入模板.csv");
+    }
+
+    private void writeTemplate(Uri uri) {
+        executorService.execute(() -> {
+            try (OutputStream out = getContentResolver().openOutputStream(uri)) {
+                if (out == null) {
+                    throw new IllegalStateException("无法写入目标文件");
+                }
+                out.write(CsvImporter.buildTemplate());
+            } catch (Exception e) {
+                e.printStackTrace();
+                handler.post(() -> {
+                    if (isFinishing() || isDestroyed()) {
+                        return;
+                    }
+                    toast(getString(R.string.template_failed, String.valueOf(e.getMessage())));
+                });
+                return;
+            }
+            handler.post(() -> {
+                if (isFinishing() || isDestroyed()) {
+                    return;
+                }
+                Toast.makeText(SettingsActivity.this,
+                        R.string.template_saved, Toast.LENGTH_LONG).show();
+            });
+        });
+    }
+
+    private static String joinLines(List<String> lines, int limit) {
+        StringBuilder sb = new StringBuilder();
+        int count = Math.min(limit, lines.size());
+        for (int i = 0; i < count; i++) {
+            sb.append("· ").append(lines.get(i));
+            if (i < count - 1) {
+                sb.append("\n");
+            }
+        }
+        if (lines.size() > count) {
+            sb.append("\n· 还有 ").append(lines.size() - count).append(" 条未显示");
+        }
+        return sb.toString();
     }
 
     // ================= 导出 =================

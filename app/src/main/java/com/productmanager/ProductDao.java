@@ -21,6 +21,15 @@ public interface ProductDao {
     @Insert
     long insert(Product product);
 
+    /**
+     * 批量插入（CSV 导入用）
+     * Room 会在单个事务里执行，比逐条 insert 快一个数量级
+     *
+     * @return 每行的 rowId，-1 表示该行失败
+     */
+    @Insert
+    long[] insertAll(List<Product> products);
+
     @Update
     void update(Product product);
 

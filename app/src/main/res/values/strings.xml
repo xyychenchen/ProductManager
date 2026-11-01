@@ -57,4 +57,14 @@
     <string name="exporting">正在导出…</string>
     <string name="export_progress">正在导出… %1$d/%2$d</string>
     <string name="export_failed">导出失败: %1$s</string>
+
+    <!-- CSV 导入 -->
+    <string name="import_from_csv">从 CSV 导入产品</string>
+    <string name="download_template">下载导入模板</string>
+    <string name="import_parsing">正在解析文件…</string>
+    <string name="import_saving">正在写入…</string>
+    <string name="import_success">导入成功，新增 %1$d 条产品</string>
+    <string name="import_failed">导入失败: %1$s</string>
+    <string name="template_saved">模板已保存，用 Excel 打开即可编辑</string>
+    <string name="template_failed">模板保存失败: %1$s</string>
 </resources>
