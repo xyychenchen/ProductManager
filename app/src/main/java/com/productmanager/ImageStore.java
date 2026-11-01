@@ -29,6 +29,9 @@ public final class ImageStore {
     /** JPEG 质量 */
     private static final int QUALITY = 85;
 
+    /** 同一毫秒内批量导入多张图时的序号，避免文件名相撞互相覆盖 */
+    private static int sequence;
+
     private ImageStore() {
     }
 
@@ -58,7 +61,7 @@ public final class ImageStore {
             return null;
         }
 
-        File target = new File(dir(context), "p_" + System.currentTimeMillis() + ".jpg");
+        File target = new File(dir(context), nextFileName());
         try (FileOutputStream fos = new FileOutputStream(target)) {
             bitmap.compress(Bitmap.CompressFormat.JPEG, QUALITY, fos);
             return target.getAbsolutePath();
@@ -69,6 +72,59 @@ public final class ImageStore {
         } finally {
             bitmap.recycle();
         }
+    }
+
+    /**
+     * 从已有的本地文件导入（用于从 xlsx 里解包出来的图片，没有 Uri 可用）。
+     *
+     * 必须在后台线程调用。源文件不会被删除，由调用方负责清理。
+     *
+     * @return 新文件的绝对路径；解不出图像（例如 EMF/WMF 矢量图）时返回 null
+     */
+    public static String importFromFile(Context context, File source) {
+        if (source == null || !source.isFile()) {
+            return null;
+        }
+        String path = source.getAbsolutePath();
+
+        BitmapFactory.Options bounds = new BitmapFactory.Options();
+        bounds.inJustDecodeBounds = true;
+        BitmapFactory.decodeFile(path, bounds);
+        // 宽高为 -1 说明 BitmapFactory 不认识这个格式（xlsx 里可能混进 emf/wmf）
+        if (bounds.outWidth <= 0 || bounds.outHeight <= 0) {
+            Log.w(TAG, "无法识别的图片格式: " + source.getName());
+            return null;
+        }
+
+        int sampleSize = 1;
+        int longest = Math.max(bounds.outWidth, bounds.outHeight);
+        while (longest / sampleSize > MAX_EDGE) {
+            sampleSize *= 2;
+        }
+
+        BitmapFactory.Options opts = new BitmapFactory.Options();
+        opts.inSampleSize = sampleSize;
+        Bitmap bitmap = BitmapFactory.decodeFile(path, opts);
+        if (bitmap == null) {
+            return null;
+        }
+
+        File target = new File(dir(context), nextFileName());
+        try (FileOutputStream fos = new FileOutputStream(target)) {
+            bitmap.compress(Bitmap.CompressFormat.JPEG, QUALITY, fos);
+            return target.getAbsolutePath();
+        } catch (IOException e) {
+            Log.e(TAG, "写入图片失败", e);
+            deleteQuietly(target.getAbsolutePath());
+            return null;
+        } finally {
+            bitmap.recycle();
+        }
+    }
+
+    private static synchronized String nextFileName() {
+        sequence = (sequence + 1) % 100000;
+        return "p_" + System.currentTimeMillis() + "_" + sequence + ".jpg";
     }
 
     /**

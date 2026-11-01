@@ -59,7 +59,7 @@
     <string name="export_failed">导出失败: %1$s</string>
 
     <!-- CSV 导入 -->
-    <string name="import_from_csv">从 CSV 导入产品</string>
+    <string name="import_from_csv">从 Excel / CSV 导入产品</string>
     <string name="download_template">下载导入模板</string>
     <string name="import_parsing">正在解析文件…</string>
     <string name="import_saving">正在写入…</string>

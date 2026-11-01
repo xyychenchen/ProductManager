@@ -19,6 +19,9 @@ import java.util.Map;
  *
  * 只解析，不碰数据库。调用方拿到 {@link Result} 后自行决定怎么写库。
  *
+ * 表头识别（findHeaderRow / mapColumns / matchField）是包内共用的，
+ * XlsxImporter 直接复用同一套别名规则，保证两种格式认列的方式完全一致。
+ *
  * 处理了这几个实际会遇到的问题：
  * 1. Excel 另存的 CSV 大多是 GBK 编码，直接按 UTF-8 读会全是乱码
  * 2. 字段里可能含逗号、换行、双引号（话术经常是这样）
@@ -215,7 +218,7 @@ public final class CsvImporter {
     /**
      * 在前几行里找表头：要求同时出现「名称」类列，且至少再认出一列
      */
-    private static int findHeaderRow(List<List<String>> rows) {
+    static int findHeaderRow(List<List<String>> rows) {
         int limit = Math.min(HEADER_SEARCH_ROWS, rows.size());
         for (int i = 0; i < limit; i++) {
             Map<String, Integer> map = mapColumns(rows.get(i));
@@ -235,7 +238,7 @@ public final class CsvImporter {
     /**
      * 表头 → 字段下标。别名覆盖常见写法，含英文。
      */
-    private static Map<String, Integer> mapColumns(List<String> header) {
+    static Map<String, Integer> mapColumns(List<String> header) {
         Map<String, Integer> map = new HashMap<>();
         for (int i = 0; i < header.size(); i++) {
             String key = normalizeHeader(header.get(i));
@@ -250,7 +253,7 @@ public final class CsvImporter {
         return map;
     }
 
-    private static String matchField(String key) {
+    static String matchField(String key) {
         // 去掉括号里的单位说明，比如「价格(美元)」→「价格」
         String k = key.replaceAll("[（(].*?[)）]", "").trim();
 
@@ -284,7 +287,7 @@ public final class CsvImporter {
         return null;
     }
 
-    private static String normalizeHeader(String raw) {
+    static String normalizeHeader(String raw) {
         if (raw == null) {
             return "";
         }
@@ -296,7 +299,7 @@ public final class CsvImporter {
                 .toLowerCase(Locale.ROOT);
     }
 
-    private static boolean isBlankRow(List<String> row) {
+    static boolean isBlankRow(List<String> row) {
         for (String cell : row) {
             if (cell != null && !cell.trim().isEmpty()) {
                 return false;
@@ -305,7 +308,7 @@ public final class CsvImporter {
         return true;
     }
 
-    private static String cell(List<String> row, Integer index) {
+    static String cell(List<String> row, Integer index) {
         if (index == null || index < 0 || index >= row.size()) {
             return "";
         }

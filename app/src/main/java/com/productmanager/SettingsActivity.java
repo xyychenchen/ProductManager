@@ -19,6 +19,7 @@ import androidx.appcompat.app.AppCompatActivity;
 
 import com.google.android.material.appbar.MaterialToolbar;
 
+import java.io.BufferedInputStream;
 import java.io.BufferedWriter;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
@@ -54,7 +55,7 @@ public class SettingsActivity extends AppCompatActivity {
 
     private List<Product> pendingExport;
     private ActivityResultLauncher<String> createDocumentLauncher;
-    private ActivityResultLauncher<String[]> openCsvLauncher;
+    private ActivityResultLauncher<String[]> openImportLauncher;
     private ActivityResultLauncher<String> saveTemplateLauncher;
 
     @Override
@@ -74,11 +75,11 @@ public class SettingsActivity extends AppCompatActivity {
                     pendingExport = null;
                 });
 
-        openCsvLauncher = registerForActivityResult(
+        openImportLauncher = registerForActivityResult(
                 new ActivityResultContracts.OpenDocument(),
                 uri -> {
                     if (uri != null) {
-                        parseCsv(uri);
+                        parseImportFile(uri);
                     }
                 });
 
@@ -113,7 +114,7 @@ public class SettingsActivity extends AppCompatActivity {
         findViewById(R.id.card_about).setOnClickListener(v -> showAboutDialog());
         findViewById(R.id.card_author).setOnClickListener(v -> openGitHub());
         findViewById(R.id.card_export).setOnClickListener(v -> exportData());
-        findViewById(R.id.card_import).setOnClickListener(v -> importFromCsv());
+        findViewById(R.id.card_import).setOnClickListener(v -> importData());
         findViewById(R.id.card_template).setOnClickListener(v -> saveTemplate());
     }
 
@@ -153,31 +154,65 @@ public class SettingsActivity extends AppCompatActivity {
     // ================= 导入 =================
 
     /**
-     * 选 CSV 文件。
+     * 选文件。CSV 和 Excel 共用这一个入口。
      *
-     * MIME 给多个值再加 "*\/*" 兜底：不同文件管理器对 csv 的类型标注不一致，
-     * 有的报 text/comma-separated-values，有的报 application/vnd.ms-excel，
-     * 只写 text/csv 会导致部分机型里文件是灰的选不中。
+     * MIME 给多个值再加 "*\/*" 兜底：不同文件管理器对表格文件的类型标注极不一致，
+     * csv 有的报 text/comma-separated-values、有的报 application/vnd.ms-excel，
+     * xlsx 有的报 openxml 长串、有的干脆报 octet-stream。
+     * 只写精确类型会导致部分机型里文件是灰的选不中。
      */
-    private void importFromCsv() {
-        openCsvLauncher.launch(new String[]{
+    private void importData() {
+        openImportLauncher.launch(new String[]{
                 "text/csv",
                 "text/comma-separated-values",
                 "text/plain",
                 "application/csv",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                "application/vnd.ms-excel",
                 "*/*"
         });
     }
 
-    private void parseCsv(Uri uri) {
+    /**
+     * 先看文件头判断是 xlsx 还是 CSV，再分派给对应的解析器。
+     *
+     * 不按扩展名判断：部分文件管理器会给文件改名，或者 ContentResolver 拿到的
+     * 显示名压根没有后缀。xlsx 本质是 zip，前四字节固定是 PK\x03\x04，这个特征骗不了人。
+     */
+    private void parseImportFile(Uri uri) {
         showProgress(R.string.import_parsing);
         executorService.execute(() -> {
-            CsvImporter.Result result;
-            try (InputStream in = getContentResolver().openInputStream(uri)) {
-                if (in == null) {
+            try (InputStream raw = getContentResolver().openInputStream(uri)) {
+                if (raw == null) {
                     throw new IllegalStateException("无法读取该文件");
                 }
-                result = CsvImporter.parse(in);
+                BufferedInputStream in = new BufferedInputStream(raw, 64 * 1024);
+                in.mark(8);
+                boolean isXlsx = XlsxImporter.looksLikeXlsx(in);
+                in.reset();
+
+                if (isXlsx) {
+                    XlsxImporter.Result result = XlsxImporter.parse(getApplicationContext(), in);
+                    handler.post(() -> {
+                        if (isFinishing() || isDestroyed()) {
+                            discardImportedImages(result.products);
+                            return;
+                        }
+                        dismissProgress();
+                        showImportPreview(result.products, result.totalRows,
+                                result.skipped, result.warnings, result.imageCount);
+                    });
+                } else {
+                    CsvImporter.Result result = CsvImporter.parse(in);
+                    handler.post(() -> {
+                        if (isFinishing() || isDestroyed()) {
+                            return;
+                        }
+                        dismissProgress();
+                        showImportPreview(result.products, result.totalRows,
+                                result.skipped, null, 0);
+                    });
+                }
             } catch (Exception e) {
                 e.printStackTrace();
                 handler.post(() -> {
@@ -187,50 +222,55 @@ public class SettingsActivity extends AppCompatActivity {
                     dismissProgress();
                     toast(getString(R.string.import_failed, String.valueOf(e.getMessage())));
                 });
-                return;
             }
-
-            handler.post(() -> {
-                if (isFinishing() || isDestroyed()) {
-                    return;
-                }
-                dismissProgress();
-                showImportPreview(result);
-            });
         });
     }
 
     /** 导入前先摊开给用户看，确认了才写库 */
-    private void showImportPreview(CsvImporter.Result result) {
-        if (result.importedCount() == 0) {
+    private void showImportPreview(List<Product> products, int totalRows,
+                                   List<String> skipped, List<String> warnings, int imageCount) {
+        List<String> skipList = skipped == null
+                ? java.util.Collections.<String>emptyList() : skipped;
+
+        if (products.isEmpty()) {
             new AlertDialog.Builder(this)
                     .setTitle("没有可导入的数据")
-                    .setMessage(result.skipped.isEmpty()
+                    .setMessage(skipList.isEmpty()
                             ? "文件里没有数据行。请确认第一行是表头，从第二行开始是产品数据。"
-                            : "所有行都被跳过了：\n\n" + joinLines(result.skipped, 5))
+                            : "所有行都被跳过了：\n\n" + joinLines(skipList, 5))
                     .setPositiveButton("知道了", null)
                     .show();
             return;
         }
 
         StringBuilder message = new StringBuilder();
-        message.append("共读取 ").append(result.totalRows).append(" 行数据\n");
-        message.append("可导入 ").append(result.importedCount()).append(" 条");
-        if (result.skippedCount() > 0) {
-            message.append("，跳过 ").append(result.skippedCount()).append(" 条");
+        message.append("共读取 ").append(totalRows).append(" 行数据\n");
+        message.append("可导入 ").append(products.size()).append(" 条");
+        if (!skipList.isEmpty()) {
+            message.append("，跳过 ").append(skipList.size()).append(" 条");
+        }
+        if (imageCount > 0) {
+            message.append("\n含产品图片 ").append(imageCount).append(" 张");
         }
         message.append("\n\n");
 
-        int previewSize = Math.min(3, result.importedCount());
+        int previewSize = Math.min(3, products.size());
         message.append("前 ").append(previewSize).append(" 条：\n");
         for (int i = 0; i < previewSize; i++) {
-            Product p = result.products.get(i);
+            Product p = products.get(i);
             message.append("· ").append(p.getName())
-                    .append("　").append(p.getFormattedPrice()).append("\n");
+                    .append("　").append(p.getFormattedPrice());
+            if (p.getPhotoPath() != null && !p.getPhotoPath().isEmpty()) {
+                message.append("　[有图]");
+            }
+            message.append("\n");
         }
 
-        if (result.skippedCount() > 0) {
-            message.append("\n跳过原因：\n").append(joinLines(result.skipped, 3));
+        if (!skipList.isEmpty()) {
+            message.append("\n跳过原因：\n").append(joinLines(skipList, 3));
+        }
+        if (warnings != null && !warnings.isEmpty()) {
+            message.append("\n提示：\n").append(joinLines(warnings, 2));
         }
 
         message.append("\n导入后会追加到现有列表，不会删除已有数据。");
@@ -238,10 +278,27 @@ public class SettingsActivity extends AppCompatActivity {
         new AlertDialog.Builder(this)
                 .setTitle("确认导入")
                 .setMessage(message.toString())
-                .setNegativeButton("取消", null)
-                .setPositiveButton("导入 " + result.importedCount() + " 条",
-                        (dialog, which) -> doImport(result.products))
+                .setNegativeButton("取消", (dialog, which) -> discardImportedImages(products))
+                .setOnCancelListener(dialog -> discardImportedImages(products))
+                .setPositiveButton("导入 " + products.size() + " 条",
+                        (dialog, which) -> doImport(products))
                 .show();
+    }
+
+    /**
+     * 用户在预览弹窗点了取消：xlsx 里的图片已经落到本地目录了，得跟着一起删掉，
+     * 否则放弃一次导入就在手机上白占几 MB。
+     */
+    private void discardImportedImages(List<Product> products) {
+        if (products == null) {
+            return;
+        }
+        for (Product product : products) {
+            String path = product.getPhotoPath();
+            if (path != null && !path.isEmpty()) {
+                ImageStore.deleteManaged(this, path);
+            }
+        }
     }
 
     private void doImport(List<Product> products) {
@@ -251,6 +308,8 @@ public class SettingsActivity extends AppCompatActivity {
                 database.productDao().insertAll(products);
             } catch (Exception e) {
                 e.printStackTrace();
+                // 写库失败，图片也没有归属了，一并回收
+                handler.post(() -> discardImportedImages(products));
                 handler.post(() -> {
                     if (isFinishing() || isDestroyed()) {
                         return;
